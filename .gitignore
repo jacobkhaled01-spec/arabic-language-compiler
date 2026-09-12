@@ -1,0 +1,49 @@
+# Build and Output Folders
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+build/
+out/
+publish/
+publish_temp/
+Installer_Output/
+تسليم_المشروع_Final_Delivery/PREXE-GN/
+تسليم_المشروع_Final_Delivery/PREXE_SingleFile/
+
+# Compiled Binaries & Object Files
+*.obj
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.pdb
+*.ilk
+*.idb
+*.exp
+
+# Generated Output / Test Artifacts
+output.asm
+output.exe
+output.il
+*.tmp
+*.result.json
+*.log
+
+# Visual Studio & IDEs
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS Generated Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
