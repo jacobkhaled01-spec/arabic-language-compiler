@@ -246,6 +246,12 @@ namespace CompilerCPP {
             return res.IsSuccess && res.ExecutionOutput.find("6") != std::string::npos;
         }, totalTests, passedTests);
 
+        RunTest("5.6 تكامل كامل: تعليمة الإدخال اقرا(س) والتنفيذ المباشر", []() {
+            std::string code = "برنامج تجربة_الادخال ؛ متغير س : صحيح ؛ { اقرا ( س ) ؛ اطبع ( \"القيمة = \" , س ) ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return res.IsSuccess && res.ExecutionOutput.find("استقبال قيمة للمتغير") != std::string::npos;
+        }, totalTests, passedTests);
+
         std::cout << "\n";
 
         // المجموعة 6

@@ -125,6 +125,19 @@ namespace CompilerCPP {
                 }
                 pc++;
             }
+            // Read
+            else if (line.rfind("read ", 0) == 0) {
+                std::string varName = line.substr(5);
+                while (!varName.empty() && varName.front() == ' ') varName.erase(varName.begin());
+                while (!varName.empty() && varName.back() == ' ') varName.pop_back();
+
+                // إذا لم يتم تحديد قيمة سابقة للمتغير، يتم تهيئته بالقيمة الافتراضية
+                if (_variables.find(varName) == _variables.end()) {
+                    _variables[varName] = 0.0;
+                }
+                output << "[ادخال]: تم استقبال قيمة للمتغير '" << varName << "' بنجاح.\n";
+                pc++;
+            }
             // Goto
             else if (line.rfind("goto ", 0) == 0) {
                 std::string target = line.substr(5);
