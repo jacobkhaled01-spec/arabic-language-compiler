@@ -20,16 +20,27 @@ namespace CompilerCPP {
             result.Tokens = lexer.Tokenize();
             if (isVerbose) std::cout << "   ✔️ تم استخراج " << result.Tokens.size() << " رمزاً معجمياً بنجاح.\n";
 
+            if (!lexer.Errors.empty()) {
+                for (const auto& err : lexer.Errors) {
+                    result.SyntaxErrors.push_back(err);
+                }
+            }
+
             // 2. التحليل النحوي وبناء شجرة الإعراب
             if (isVerbose) std::cout << "🔹 [2/6] مرحلة التحليل النحوي وبناء شجرة الإعراب (Syntax Analysis)...\n";
             Parser parser(result.Tokens);
             result.AST = parser.ParseProgram();
             
             if (!parser.Errors.empty()) {
-                result.SyntaxErrors = parser.Errors;
+                for (const auto& err : parser.Errors) {
+                    result.SyntaxErrors.push_back(err);
+                }
+            }
+
+            if (!result.SyntaxErrors.empty()) {
                 result.IsSuccess = false;
                 if (isVerbose) {
-                    std::cout << "   ❌ تم اكتشاف أخطاء نحوية في الكود:\n";
+                    std::cout << "   ❌ تم اكتشاف أخطاء في مرحلة التحليل المعجمي / النحوي:\n";
                     for (const auto& err : result.SyntaxErrors) {
                         std::cout << "      ⚠️ " << err << "\n";
                     }

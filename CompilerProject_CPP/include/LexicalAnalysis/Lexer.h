@@ -38,6 +38,8 @@ namespace CompilerCPP {
         Token ReadOperator();
 
     public:
+        std::vector<std::string> Errors;
+
         explicit Lexer(std::string sourceCode);
         std::vector<Token> Tokenize();
     };

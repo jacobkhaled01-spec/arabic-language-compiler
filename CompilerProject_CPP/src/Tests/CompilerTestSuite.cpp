@@ -5,6 +5,7 @@
 #include "../../include/IntermediateCode/IntermediateCodeGenerator.h"
 #include "../../include/CodeGeneration/AssemblyCodeGenerator.h"
 #include "../../include/CodeGeneration/CompilerRunner.h"
+#include "../../include/CodeGeneration/TACInterpreter.h"
 #include <iostream>
 #include <functional>
 #include <algorithm>
@@ -117,83 +118,51 @@ namespace CompilerCPP {
         // المجموعة 3
         std::cout << "🔹 [المجموعة 3]: اختبارات كشف الأخطاء النحوية (Syntax Error Negative Tests)\n";
         RunTest("3.1 كشف خطأ غياب كلمة 'برنامج' في البداية", []() {
-            try {
-                std::string code = "بدء_بدون_كلمة_برنامج ؛ { } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("برنامج") != std::string::npos;
-            }
+            std::string code = "بدء_بدون_كلمة_برنامج ؛ { } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("برنامج") != std::string::npos;
         }, totalTests, passedTests);
 
         RunTest("3.2 كشف خطأ نسيان الفاصلة المنقوطة '؛' بعد اسم البرنامج", []() {
-            try {
-                std::string code = "برنامج اسم_بدون_فاصلة { } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("فاصلة منقوطة") != std::string::npos;
-            }
+            std::string code = "برنامج اسم_بدون_فاصلة { } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("فاصلة منقوطة") != std::string::npos;
         }, totalTests, passedTests);
 
         RunTest("3.3 كشف خطأ تعليمة غير مكتملة (معرف بمفرده 'س' بدون '=' أو '(')", []() {
-            try {
-                std::string code = "برنامج فحص ؛ متغير س , ص : صحيح ؛ { س ص = 10 ؛ } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("تعليمة غير مكتملة") != std::string::npos;
-            }
+            std::string code = "برنامج فحص ؛ متغير س , ص : صحيح ؛ { س ص = 10 ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty();
         }, totalTests, passedTests);
 
         RunTest("3.4 كشف خطأ غياب كلمة 'فان' في الجملة الشرطية", []() {
-            try {
-                std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { اذا ( س > 0 ) { س = 1 ؛ } } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("فان") != std::string::npos;
-            }
+            std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { اذا ( س > 0 ) { س = 1 ؛ } } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("فان") != std::string::npos;
         }, totalTests, passedTests);
 
         RunTest("3.5 كشف خطأ غياب كلمة 'استمر' في حلقة طالما", []() {
-            try {
-                std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { طالما ( س > 0 ) { س = 1 ؛ } } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("استمر") != std::string::npos;
-            }
+            std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { طالما ( س > 0 ) { س = 1 ؛ } } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("استمر") != std::string::npos;
         }, totalTests, passedTests);
 
         RunTest("3.6 كشف خطأ غياب كلمة 'حتى' في حلقة أعد", []() {
-            try {
-                std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { اعد { س = 1 ؛ } ( س > 0 ) ؛ } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("حتى") != std::string::npos;
-            }
+            std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { اعد { س = 1 ؛ } ( س > 0 ) ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("حتى") != std::string::npos;
         }, totalTests, passedTests);
 
         RunTest("3.7 كشف خطأ تعبير حسابي غير سليم (10 + * 5)", []() {
-            try {
-                std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { س = 10 + * 5 ؛ } .";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (...) {
-                return true;
-            }
+            std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { س = 10 + * 5 ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty();
         }, totalTests, passedTests);
 
         RunTest("3.8 كشف خطأ نسيان النقطة '.' في نهاية البرنامج", []() {
-            try {
-                std::string code = "برنامج فحص ؛ { } ";
-                Parser(Lexer(code).Tokenize()).ParseProgram();
-                return false;
-            } catch (const std::exception& ex) {
-                return std::string(ex.what()).find("نقطة") != std::string::npos;
-            }
+            std::string code = "برنامج فحص ؛ { } ";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SyntaxErrors.empty() && res.SyntaxErrors[0].find("نقطة") != std::string::npos;
         }, totalTests, passedTests);
 
         std::cout << "\n";
@@ -275,6 +244,43 @@ namespace CompilerCPP {
             std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { س = 0 ؛ اعد { س = س + 2 ؛ } حتى ( س >= 6 ) ؛ اطبع ( س ) ؛ } .";
             auto res = CompilerRunner::Compile(code, false);
             return res.IsSuccess && res.ExecutionOutput.find("6") != std::string::npos;
+        }, totalTests, passedTests);
+
+        std::cout << "\n";
+
+        // المجموعة 6
+        std::cout << "🔹 [المجموعة 6]: اختبارات الحالات السلبية واكتشاف الأخطاء المعجمية والدلالية المتقدمة\n";
+        RunTest("6.1 كشف الخطأ المعجمي للرموز غير المعروفة ($)", []() {
+            std::string code = "برنامج فحص ؛ متغير س : صحيح ؛ { س = 10 $ 5 ؛ } .";
+            Lexer lexer(code);
+            lexer.Tokenize();
+            return !lexer.Errors.empty() && lexer.Errors[0].find("$") != std::string::npos;
+        }, totalTests, passedTests);
+
+        RunTest("6.2 كشف الخطأ المعجمي للسلاسل النصية غير المغلقة", []() {
+            std::string code = "برنامج فحص ؛ { اطبع ( \"نص غير مغلق ) ؛ } .";
+            Lexer lexer(code);
+            lexer.Tokenize();
+            return !lexer.Errors.empty() && lexer.Errors[0].find("غير مغلقة") != std::string::npos;
+        }, totalTests, passedTests);
+
+        RunTest("6.3 كشف الخطأ الدلالي عند تمرير قيمة أو تعبير لمعلمة 'بالمرجع'", []() {
+            std::string code = "برنامج تجربة_المرجع ؛\nاجراء تبديل ( بالمرجع أ : صحيح ) ؛ { أ = 5 ؛ } ؛\n{ تبديل ( 10 + 2 ) ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SemanticErrors.empty() && res.SemanticErrors[0].find("بالمرجع") != std::string::npos;
+        }, totalTests, passedTests);
+
+        RunTest("6.4 كشف الخطأ الدلالي عند عدم تطابق عدد المعاملات في الاستدعاء", []() {
+            std::string code = "برنامج تجربة_المعاملات ؛\nاجراء اختبار_المعلمات ( بالقيمة أ : صحيح ؛ بالقيمة ب : صحيح ) ؛ { } ؛\n{ اختبار_المعلمات ( 10 ) ؛ } .";
+            auto res = CompilerRunner::Compile(code, false);
+            return !res.IsSuccess && !res.SemanticErrors.empty() && res.SemanticErrors[0].find("عدم تطابق عدد المعاملات") != std::string::npos;
+        }, totalTests, passedTests);
+
+        RunTest("6.5 حماية مفسر TAC من القسمة على صفر وإرجاع صفر بأمان", []() {
+            std::vector<std::string> tac = { "س = 10 / 0", "print س" };
+            TACInterpreter vm(tac);
+            std::string out = vm.Execute();
+            return out.find("0") != std::string::npos;
         }, totalTests, passedTests);
 
         std::cout << "\n=========================================================================================\n";

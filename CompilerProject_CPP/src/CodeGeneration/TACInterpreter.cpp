@@ -23,8 +23,8 @@ namespace CompilerCPP {
         }
 
         // Try boolean
-        if (s == "صواب" || s == "true") return 1.0;
-        if (s == "خطأ" || s == "false") return 0.0;
+        if (s == "صواب" || s == "true" || s == "صح") return 1.0;
+        if (s == "خطأ" || s == "false" || s == "خطا") return 0.0;
 
         // Try variable
         if (_variables.find(s) != _variables.end()) {
@@ -45,7 +45,12 @@ namespace CompilerCPP {
                 if (op == "+")  return leftVal + rightVal;
                 if (op == "-")  return leftVal - rightVal;
                 if (op == "*")  return leftVal * rightVal;
-                if (op == "/" || op == "\\") return (rightVal != 0.0) ? (leftVal / rightVal) : 0.0;
+                if (op == "/" || op == "\\") {
+                    if (rightVal == 0.0) {
+                        return 0.0; // Division by zero guard
+                    }
+                    return (leftVal / rightVal);
+                }
                 if (op == "%")  return std::fmod(leftVal, rightVal != 0.0 ? rightVal : 1.0);
                 if (op == "^")  return std::pow(leftVal, rightVal);
                 if (op == "==") return (leftVal == rightVal) ? 1.0 : 0.0;
@@ -108,18 +113,15 @@ namespace CompilerCPP {
                     output << arg.substr(1, arg.size() - 2) << "\n";
                 } else if (_variables.find(arg) != _variables.end()) {
                     double v = _variables[arg];
-                    if (v == std::floor(v)) {
+                    if (std::floor(v) == v) {
                         output << static_cast<long long>(v) << "\n";
                     } else {
                         output << v << "\n";
                     }
+                } else if (_stringVars.find(arg) != _stringVars.end()) {
+                    output << _stringVars[arg] << "\n";
                 } else {
-                    double v = EvaluateExpr(arg);
-                    if (v == std::floor(v)) {
-                        output << static_cast<long long>(v) << "\n";
-                    } else {
-                        output << v << "\n";
-                    }
+                    output << arg << "\n";
                 }
                 pc++;
             }
@@ -133,17 +135,43 @@ namespace CompilerCPP {
                     pc++;
                 }
             }
-            // If ... goto
+            // If condition goto
             else if (line.rfind("if ", 0) == 0) {
-                size_t gPos = line.find(" goto ");
-                std::string cond = line.substr(3, gPos - 3);
-                std::string target = line.substr(gPos + 6);
-                while (!target.empty() && target.front() == ' ') target.erase(target.begin());
+                size_t gotoPos = line.find(" goto ");
+                if (gotoPos != std::string::npos) {
+                    std::string condStr = line.substr(3, gotoPos - 3);
+                    std::string target = line.substr(gotoPos + 6);
+                    while (!target.empty() && target.front() == ' ') target.erase(target.begin());
 
-                double condVal = EvaluateExpr(cond);
-                if (condVal != 0.0) {
-                    if (_labels.find(target) != _labels.end()) {
-                        pc = _labels[target];
+                    double condVal = EvaluateExpr(condStr);
+                    if (condVal != 0.0) {
+                        if (_labels.find(target) != _labels.end()) {
+                            pc = _labels[target];
+                        } else {
+                            pc++;
+                        }
+                    } else {
+                        pc++;
+                    }
+                } else {
+                    pc++;
+                }
+            }
+            // IfFalse condition goto
+            else if (line.rfind("ifFalse ", 0) == 0) {
+                size_t gotoPos = line.find(" goto ");
+                if (gotoPos != std::string::npos) {
+                    std::string condStr = line.substr(8, gotoPos - 8);
+                    std::string target = line.substr(gotoPos + 6);
+                    while (!target.empty() && target.front() == ' ') target.erase(target.begin());
+
+                    double condVal = EvaluateExpr(condStr);
+                    if (condVal == 0.0) {
+                        if (_labels.find(target) != _labels.end()) {
+                            pc = _labels[target];
+                        } else {
+                            pc++;
+                        }
                     } else {
                         pc++;
                     }
@@ -168,6 +196,10 @@ namespace CompilerCPP {
             } else {
                 pc++;
             }
+        }
+
+        if (instructionsCount >= 100000) {
+            output << "\n[تحذير أمان تشغيلي]: تم إيقاف التنفيذ تلقائياً لتجاوز الحد الأقصى المسموح (100,000 تعليمة) لمنع تجميد النظام.\n";
         }
 
         return output.str();
