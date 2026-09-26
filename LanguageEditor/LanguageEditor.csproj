@@ -15,4 +15,10 @@
     <ProjectReference Include="..\CompilerProject\CompilerProject.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\CompilerProject_CPP\CompilerProject_CPP.exe">
+      <LogicalName>CompilerProject_CPP.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>

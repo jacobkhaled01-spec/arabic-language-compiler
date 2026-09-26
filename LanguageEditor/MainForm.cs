@@ -53,6 +53,7 @@ namespace LanguageEditor
         public MainForm()
         {
             InitializeComponent();
+            try { EnsureCompilerCppExtracted(); } catch { }
             SetupLiveTimer();
             LoadDefaultArabicCode();
             UpdateLineNumbers();
@@ -962,6 +963,13 @@ namespace LanguageEditor
         private string FindCompilerExe()
         {
             bool isCpp = (_compilerEngineCombo == null || _compilerEngineCombo.SelectedIndex == 0);
+            if (isCpp)
+            {
+                string extracted = EnsureCompilerCppExtracted();
+                if (!string.IsNullOrEmpty(extracted) && File.Exists(extracted))
+                    return extracted;
+            }
+
             string targetExe = isCpp ? "CompilerProject_CPP.exe" : "CompilerProject.exe";
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
@@ -970,6 +978,7 @@ namespace LanguageEditor
             string[] possiblePaths = new[]
             {
                 Path.Combine(baseDir, targetExe),
+                Path.Combine(Path.GetTempPath(), targetExe),
                 Path.Combine(baseDir, "..", "..", "..", "..", isCpp ? "CompilerProject_CPP" : "CompilerProject\\bin\\Debug\\net9.0", targetExe),
                 Path.Combine(baseDir, "..", "..", isCpp ? "CompilerProject_CPP" : "CompilerProject\\bin\\Debug\\net9.0", targetExe),
                 Path.Combine(currDir, targetExe),
@@ -985,6 +994,58 @@ namespace LanguageEditor
                 }
                 catch { }
             }
+
+            return "";
+        }
+
+        private static string EnsureCompilerCppExtracted()
+        {
+            string targetExe = "CompilerProject_CPP.exe";
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string localPath = Path.Combine(baseDir, targetExe);
+            if (File.Exists(localPath) && new FileInfo(localPath).Length > 10000) return localPath;
+
+            string tempPath = Path.Combine(Path.GetTempPath(), targetExe);
+            if (File.Exists(tempPath) && new FileInfo(tempPath).Length > 10000) return tempPath;
+
+            try
+            {
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                string? resName = null;
+                foreach (var n in asm.GetManifestResourceNames())
+                {
+                    if (n.EndsWith("CompilerProject_CPP.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        resName = n;
+                        break;
+                    }
+                }
+
+                if (resName != null)
+                {
+                    using var stream = asm.GetManifestResourceStream(resName);
+                    if (stream != null)
+                    {
+                        try
+                        {
+                            using (var fs = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                            {
+                                stream.CopyTo(fs);
+                            }
+                            if (File.Exists(localPath) && new FileInfo(localPath).Length > 10000) return localPath;
+                        }
+                        catch { }
+
+                        stream.Position = 0;
+                        using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            stream.CopyTo(fs);
+                        }
+                        if (File.Exists(tempPath) && new FileInfo(tempPath).Length > 10000) return tempPath;
+                    }
+                }
+            }
+            catch { }
 
             return "";
         }

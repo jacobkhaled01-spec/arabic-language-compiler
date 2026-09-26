@@ -84,7 +84,16 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
         HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
         DWORD fileType = GetFileType(hStdin);
-        if (fileType == FILE_TYPE_PIPE || fileType == FILE_TYPE_DISK) {
+        if (fileType == FILE_TYPE_PIPE) {
+            DWORD bytesAvail = 0;
+            if (PeekNamedPipe(hStdin, NULL, 0, NULL, &bytesAvail, NULL) && bytesAvail > 0) {
+                std::vector<char> buf(bytesAvail);
+                DWORD bytesRead = 0;
+                if (ReadFile(hStdin, buf.data(), bytesAvail, &bytesRead, NULL) && bytesRead > 0) {
+                    userInput.append(buf.data(), bytesRead);
+                }
+            }
+        } else if (fileType == FILE_TYPE_DISK) {
             char buffer[2048];
             DWORD bytesRead = 0;
             while (ReadFile(hStdin, buffer, sizeof(buffer), &bytesRead, NULL) && bytesRead > 0) {
