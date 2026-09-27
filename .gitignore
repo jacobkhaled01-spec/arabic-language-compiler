@@ -51,3 +51,8 @@ $RECYCLE.BIN/
 scratch_pub/
 G20/
 
+
+G20/
+*.rar
+*.zip
+
