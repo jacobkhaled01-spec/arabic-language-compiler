@@ -64,7 +64,7 @@ namespace CompilerProject.SyntaxAnalysis
 
         public void Synchronize()
         {
-            while (Current.Type != TokenType.EndOfFile && Current.Value != "}" && Current.Value != ".")
+            while (Current.Type != TokenType.EndOfFile && Current.Value != "}" && Current.Value != "." && Current.Value != "النهاية")
             {
                 if (Current.Value == "؛")
                 {
@@ -72,7 +72,7 @@ namespace CompilerProject.SyntaxAnalysis
                     return;
                 }
 
-                if (Current.Value is "اذا" or "طالما" or "اعد" or "كرر" or "اطبع" or "اقرا" or "اقرأ" or "اقرء" or "متغير" or "ثابت" or "نوع" or "اجراء")
+                if (Current.Value is "اذا" or "طالما" or "اعد" or "كرر" or "اطبع" or "اقرا" or "اقرأ" or "اقرء" or "متغير" or "ثابت" or "نوع" or "اجراء" or "إجراء" or "دالة" or "داله")
                 {
                     return;
                 }
@@ -135,208 +135,223 @@ namespace CompilerProject.SyntaxAnalysis
 
         private bool IsDeclarationStart()
         {
-            return Current.Value is "ثابت" or "نوع" or "متغير" or "اجراء";
+            return Current.Value is "ثابت" or "نوع" or "متغير" or "اجراء" or "إجراء" or "دالة" or "داله";
         }
 
         /// <summary>
-        /// <جزء_التعريفات> := [<تعريف_الثوابت>] [<تعريف_الانواع>] [<تعريف_المتغيرات>] [<تعريف_الاجراءات>]
+        /// <جزء_التعريفات> := [<تعريف_الثوابت>] [<تعريف_الانواع>] [<تعريف_المتغيرات>] [<تعريف_الاجراءات>] (بأي ترتيب)
         /// </summary>
         private Node ParseDeclarations()
         {
             var declsNode = new Node("Declarations", Current.Line);
+            bool progressed = true;
 
-            // أ. تعريف الثوابت
-            while (Current.Value == "ثابت")
+            while (progressed)
             {
-                try
+                progressed = false;
+
+                // أ. تعريف الثوابت
+                if (Current.Value == "ثابت")
                 {
-                    Advance();
-                    var constsNode = new Node("ConstDeclarations", Current.Line);
-                    while (Current.Type == TokenType.Identifier)
+                    progressed = true;
+                    try
                     {
-                        var constName = Advance();
-                        Expect("=", "يجب وضع علامة '=' بعد اسم الثابت");
-                        
-                        string sign = "";
-                        if (Current.Value is "+" or "-") sign = Advance().Value;
-
-                        var constVal = Advance();
-                        Expect("؛", "يجب إنهاء تعريف الثابت بفاصلة منقوطة '؛'");
-
-                        var cNode = new Node("ConstDecl", constName.Value, sign + constVal.Value, constName.Line);
-                        cNode.Val = sign + constVal.Value;
-                        constsNode.AddChild(cNode);
-                    }
-                    declsNode.AddChild(constsNode);
-                }
-                catch (Exception ex)
-                {
-                    if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
-                    Synchronize();
-                }
-            }
-
-            // ب. تعريف الأنواع (قوائم وسجلات)
-            while (Current.Value == "نوع")
-            {
-                try
-                {
-                    Advance();
-                    var typesNode = new Node("TypeDeclarations", Current.Line);
-                    while (Current.Type == TokenType.Identifier)
-                    {
-                        var typeName = Advance();
-                        Expect("=", "يجب وضع علامة '=' بعد اسم النوع");
-
-                        if (Current.Value == "قائمة")
+                        Advance();
+                        var constsNode = new Node("ConstDeclarations", Current.Line);
+                        while (Current.Type == TokenType.Identifier)
                         {
-                            Advance();
-                            Expect("[", "يجب فتح قوس مربع '[' لحجم القائمة");
-                            var sizeToken = ExpectType(TokenType.Number, "يجب تحديد حجم القائمة كرقم");
-                            Expect("]", "يجب إغلاق القوس المربع ']'");
-                            Expect("من", "يجب كتابة كلمة 'من' لتحديد نوع عناصر القائمة");
-                            var elemType = Advance();
-                            Expect("؛", "يجب إنهاء تعريف النوع بفاصلة منقوطة '؛'");
+                            var constName = Advance();
+                            Expect("=", "يجب وضع علامة '=' بعد اسم الثابت");
+                            
+                            string sign = "";
+                            if (Current.Value is "+" or "-") sign = Advance().Value;
 
-                            var arrayNode = new Node("TypeDecl_Array", typeName.Value, elemType.Value, typeName.Line);
-                            arrayNode.Val = sizeToken.Value;
-                            typesNode.AddChild(arrayNode);
+                            var constVal = Advance();
+                            Expect("؛", "يجب إنهاء تعريف الثابت بفاصلة منقوطة '؛'");
+
+                            var cNode = new Node("ConstDecl", constName.Value, sign + constVal.Value, constName.Line);
+                            cNode.Val = sign + constVal.Value;
+                            constsNode.AddChild(cNode);
                         }
-                        else if (Current.Value == "سجل")
+                        declsNode.AddChild(constsNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
+                        Synchronize();
+                    }
+                }
+                // ب. تعريف الأنواع (قوائم وسجلات)
+                else if (Current.Value == "نوع")
+                {
+                    progressed = true;
+                    try
+                    {
+                        Advance();
+                        var typesNode = new Node("TypeDeclarations", Current.Line);
+                        while (Current.Type == TokenType.Identifier)
                         {
-                            Advance();
-                            Expect("{", "يجب فتح قوس مجموعة '{' لحقول السجل");
-                            var recordNode = new Node("TypeDecl_Record", typeName.Value, typeName.Line);
+                            var typeName = Advance();
+                            Expect("=", "يجب وضع علامة '=' بعد اسم النوع");
 
-                            while (Current.Type == TokenType.Identifier)
+                            if (Current.Value is "قائمة" or "مصفوفة")
                             {
-                                var fieldNames = new List<string> { Advance().Value };
+                                Advance();
+                                Expect("[", "يجب فتح قوس مربع '[' لحجم القائمة");
+                                var sizeToken = ExpectType(TokenType.Number, "يجب تحديد حجم القائمة كرقم");
+                                Expect("]", "يجب إغلاق القوس المربع ']'");
+                                Expect("من", "يجب كتابة كلمة 'من' لتحديد نوع عناصر القائمة");
+                                var elemType = Advance();
+                                Expect("؛", "يجب إنهاء تعريف النوع بفاصلة منقوطة '؛'");
+
+                                var arrayNode = new Node("TypeDecl_Array", typeName.Value, elemType.Value, typeName.Line);
+                                arrayNode.Val = sizeToken.Value;
+                                typesNode.AddChild(arrayNode);
+                            }
+                            else if (Current.Value == "سجل")
+                            {
+                                Advance();
+                                Expect("{", "يجب فتح قوس مجموعة '{' لحقول السجل");
+                                var recordNode = new Node("TypeDecl_Record", typeName.Value, typeName.Line);
+
+                                while (Current.Type == TokenType.Identifier)
+                                {
+                                    var fieldNames = new List<string> { Advance().Value };
+                                    while (MatchComma())
+                                    {
+                                        fieldNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم الحقل").Value);
+                                    }
+                                    Expect(":", "يجب وضع نقطتين ':' بعد أسماء الحقول");
+                                    var fieldType = Advance().Value;
+
+                                    foreach (var fName in fieldNames)
+                                    {
+                                        recordNode.AddChild(new Node("FieldDecl", fName, fieldType, typeName.Line));
+                                    }
+
+                                    if (Current.Value == "؛") Advance();
+                                }
+                                Expect("}", "يجب إغلاق قوس المجموعة '}' للسجل");
+                                Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد تعريف السجل");
+                                typesNode.AddChild(recordNode);
+                            }
+                        }
+                        declsNode.AddChild(typesNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
+                        Synchronize();
+                    }
+                }
+                // ج. تعريف المتغيرات
+                else if (Current.Value == "متغير")
+                {
+                    progressed = true;
+                    try
+                    {
+                        Advance();
+                        var varsNode = new Node("VarDeclarations", Current.Line);
+                        while (Current.Type == TokenType.Identifier)
+                        {
+                            var varNames = new List<Token> { Advance() };
+                            while (MatchComma())
+                            {
+                                varNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
+                            }
+
+                            Expect(":", "يجب وضع نقطتين ':' بعد أسماء المتغيرات");
+                            var typeToken = Advance();
+                            Expect("؛", "يجب إنهاء تعريف المتغير بفاصلة منقوطة '؛'");
+
+                            foreach (var v in varNames)
+                            {
+                                varsNode.AddChild(new Node("VarDecl", v.Value, typeToken.Value, v.Line));
+                            }
+                        }
+                        declsNode.AddChild(varsNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
+                        Synchronize();
+                    }
+                }
+                // د. تعريف الإجراءات
+                else if (Current.Value is "اجراء" or "إجراء" or "دالة" or "داله")
+                {
+                    progressed = true;
+                    try
+                    {
+                        Advance();
+                        var procName = ExpectType(TokenType.Identifier, "يجب كتابة اسم الإجراء بعد كلمة 'اجراء'");
+                        Expect("(", "يجب فتح قوس '(' لمعلمات الإجراء");
+
+                        var procNode = new Node("ProcDecl", procName.Value, procName.Line);
+                        var paramsNode = new Node("FormalParams", procName.Line);
+
+                        if (Current.Value != ")")
+                        {
+                            do
+                            {
+                                string passingMode = "بالقيمة";
+                                if (Current.Value is "بالقيمة" or "بالمرجع")
+                                {
+                                    passingMode = Advance().Value;
+                                }
+
+                                var paramNames = new List<string> { ExpectType(TokenType.Identifier, "اسم المعلمة").Value };
                                 while (MatchComma())
                                 {
-                                    fieldNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم الحقل").Value);
+                                    paramNames.Add(ExpectType(TokenType.Identifier, "اسم المعلمة").Value);
                                 }
-                                Expect(":", "يجب وضع نقطتين ':' بعد أسماء الحقول");
-                                var fieldType = Advance().Value;
+                                Expect(":", "نقطتين بعد المعلمات");
+                                var pType = Advance().Value;
 
-                                foreach (var fName in fieldNames)
+                                foreach (var pn in paramNames)
                                 {
-                                    recordNode.AddChild(new Node("FieldDecl", fName, fieldType, typeName.Line));
+                                    var pNode = new Node("Param", pn, pType, procName.Line);
+                                    pNode.Val = passingMode;
+                                    paramsNode.AddChild(pNode);
                                 }
-
-                                if (Current.Value == "؛") Advance();
-                            }
-                            Expect("}", "يجب إغلاق قوس المجموعة '}' للسجل");
-                            Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد تعريف السجل");
-                            typesNode.AddChild(recordNode);
+                            } while (Match("؛"));
                         }
+                        Expect(")", "يجب إغلاق قوس المعلمات ')'");
+                        Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد رأس الإجراء");
+
+                        procNode.AddChild(paramsNode);
+                        procNode.AddChild(ParseBlock());
+                        Expect("؛", "يجب إنهاء كتلة الإجراء بفاصلة منقوطة '؛'");
+
+                        declsNode.AddChild(procNode);
                     }
-                    declsNode.AddChild(typesNode);
-                }
-                catch (Exception ex)
-                {
-                    if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
-                    Synchronize();
-                }
-            }
-
-            // ج. تعريف المتغيرات
-            while (Current.Value == "متغير")
-            {
-                try
-                {
-                    Advance();
-                    var varsNode = new Node("VarDeclarations", Current.Line);
-                    while (Current.Type == TokenType.Identifier)
+                    catch (Exception ex)
                     {
-                        var varNames = new List<Token> { Advance() };
-                        while (MatchComma())
-                        {
-                            varNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
-                        }
-
-                        Expect(":", "يجب وضع نقطتين ':' بعد أسماء المتغيرات");
-                        var typeToken = Advance();
-                        Expect("؛", "يجب إنهاء تعريف المتغير بفاصلة منقوطة '؛'");
-
-                        foreach (var v in varNames)
-                        {
-                            varsNode.AddChild(new Node("VarDecl", v.Value, typeToken.Value, v.Line));
-                        }
+                        if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
+                        Synchronize();
                     }
-                    declsNode.AddChild(varsNode);
                 }
-                catch (Exception ex)
-                {
-                    if (!Errors.Contains(ex.Message)) Errors.Add(ex.Message);
-                    Synchronize();
-                }
-            }
-
-            // د. تعريف الإجراءات
-            while (Current.Value == "اجراء")
-            {
-                Advance();
-                var procName = ExpectType(TokenType.Identifier, "يجب كتابة اسم الإجراء بعد كلمة 'اجراء'");
-                Expect("(", "يجب فتح قوس '(' لمعلمات الإجراء");
-
-                var procNode = new Node("ProcDecl", procName.Value, procName.Line);
-                var paramsNode = new Node("FormalParams", procName.Line);
-
-                if (Current.Value != ")")
-                {
-                    do
-                    {
-                        string passingMode = "بالقيمة";
-                        if (Current.Value is "بالقيمة" or "بالمرجع")
-                        {
-                            passingMode = Advance().Value;
-                        }
-
-                        var paramNames = new List<string> { ExpectType(TokenType.Identifier, "اسم المعلمة").Value };
-                        while (MatchComma())
-                        {
-                            paramNames.Add(ExpectType(TokenType.Identifier, "اسم المعلمة").Value);
-                        }
-                        Expect(":", "نقطتين بعد المعلمات");
-                        var pType = Advance().Value;
-
-                        foreach (var pn in paramNames)
-                        {
-                            var pNode = new Node("Param", pn, pType, procName.Line);
-                            pNode.Val = passingMode;
-                            paramsNode.AddChild(pNode);
-                        }
-                    } while (Match("؛"));
-                }
-                Expect(")", "يجب إغلاق قوس المعلمات ')'");
-                Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد رأس الإجراء");
-
-                procNode.AddChild(paramsNode);
-                procNode.AddChild(ParseBlock());
-                Expect("؛", "يجب إنهاء كتلة الإجراء بفاصلة منقوطة '؛'");
-
-                declsNode.AddChild(procNode);
             }
 
             return declsNode;
         }
 
         /// <summary>
-        /// <قائمة_تعليمات> := { <تعليمة> (؛ <تعليمة>)* }
+        /// <قائمة_تعليمات> := { <تعليمة> (؛ <تعليمة>)* } | ابدأ ... النهاية
         /// </summary>
         private Node ParseStatementList()
         {
-            if (Current.Value is "{" or "}")
+            if (Current.Value is "{" or "}" or "ابدأ" or "ابدا")
             {
                 Advance();
             }
             else
             {
-                Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+                Expect("{", "يجب فتح قوس مجموعة '{' أو كلمة 'ابدأ' لبدء قائمة التعليمات");
             }
             var stmtListNode = new Node("StatementList", Current.Line);
 
-            while (Current.Value != "}" && Current.Value != "{" && Current.Value != "." && Current.Type != TokenType.EndOfFile)
+            while (Current.Value != "}" && Current.Value != "{" && Current.Value != "النهاية" && Current.Value != "." && Current.Type != TokenType.EndOfFile)
             {
                 try
                 {
@@ -362,7 +377,7 @@ namespace CompilerProject.SyntaxAnalysis
                 }
             }
 
-            if (Current.Value is "}" or "{")
+            if (Current.Value is "}" or "{" or "النهاية")
             {
                 Advance();
             }
@@ -509,6 +524,11 @@ namespace CompilerProject.SyntaxAnalysis
             }
 
             // 8. جملة الإسناد أو استدعاء إجراء
+            if (Current.Value is "استدعاء" or "نداء")
+            {
+                Advance();
+            }
+
             if (Current.Type == TokenType.Identifier)
             {
                 int line = Current.Line;
@@ -518,7 +538,14 @@ namespace CompilerProject.SyntaxAnalysis
                 if (Match("="))
                 {
                     var expr = ParseExpression();
-                    var assignNode = new Node("Assign", varAccess.Name, line);
+                    string rootVar = varAccess.Name;
+                    var curr = varAccess;
+                    while (curr.Children.Count > 0 && curr.Value is "FieldAccess" or "IndexedAccess")
+                    {
+                        curr = curr.Children[0];
+                        rootVar = curr.Name;
+                    }
+                    var assignNode = new Node("Assign", rootVar, line);
                     assignNode.AddChild(varAccess);
                     assignNode.AddChild(expr);
                     return assignNode;
@@ -637,25 +664,73 @@ namespace CompilerProject.SyntaxAnalysis
         // ==========================================
 
         /// <summary>
-        /// <تعبير> := <تعبير_بسيط> [<معامل_ربط> <تعبير_بسيط>]
+        /// سلم أسبقية التعابير الأكاديمي القياسي (Aho et al., 2006)
+        /// ParseExpression -> LogicalOr -> LogicalAnd -> Equality -> Relational -> SimpleExpression -> Term -> Factor
         /// </summary>
         public Node ParseExpression()
         {
-            var left = ParseSimpleExpression();
+            return ParseLogicalOr();
+        }
 
-            if (IsRelationalOperator(Current.Value))
+        private Node ParseLogicalOr()
+        {
+            var node = ParseLogicalAnd();
+            while (Current.Value == "||")
             {
                 var opToken = Advance();
-                var right = ParseSimpleExpression();
-
-                var relNode = new Node("BinaryExpr", opToken.Line);
-                relNode.Val = opToken.Value;
-                relNode.AddChild(left);
-                relNode.AddChild(right);
-                return relNode;
+                var bin = new Node("BinaryExpr", opToken.Line);
+                bin.Val = opToken.Value;
+                bin.AddChild(node);
+                bin.AddChild(ParseLogicalAnd());
+                node = bin;
             }
+            return node;
+        }
 
-            return left;
+        private Node ParseLogicalAnd()
+        {
+            var node = ParseEquality();
+            while (Current.Value == "&&")
+            {
+                var opToken = Advance();
+                var bin = new Node("BinaryExpr", opToken.Line);
+                bin.Val = opToken.Value;
+                bin.AddChild(node);
+                bin.AddChild(ParseEquality());
+                node = bin;
+            }
+            return node;
+        }
+
+        private Node ParseEquality()
+        {
+            var node = ParseRelational();
+            while (Current.Value is "==" or "!=" or "=")
+            {
+                var opToken = Advance();
+                string opVal = (opToken.Value == "=") ? "==" : opToken.Value;
+                var bin = new Node("BinaryExpr", opToken.Line);
+                bin.Val = opVal;
+                bin.AddChild(node);
+                bin.AddChild(ParseRelational());
+                node = bin;
+            }
+            return node;
+        }
+
+        private Node ParseRelational()
+        {
+            var node = ParseSimpleExpression();
+            while (Current.Value is "<" or "<=" or ">" or ">=")
+            {
+                var opToken = Advance();
+                var bin = new Node("BinaryExpr", opToken.Line);
+                bin.Val = opToken.Value;
+                bin.AddChild(node);
+                bin.AddChild(ParseSimpleExpression());
+                node = bin;
+            }
+            return node;
         }
 
         /// <summary>
@@ -679,7 +754,7 @@ namespace CompilerProject.SyntaxAnalysis
                 left = uNode;
             }
 
-            while (Current.Value is "+" or "-" or "||")
+            while (Current.Value is "+" or "-")
             {
                 var opToken = Advance();
                 var right = ParseTerm();
@@ -701,7 +776,7 @@ namespace CompilerProject.SyntaxAnalysis
         {
             var left = ParseFactor();
 
-            while (Current.Value is "^" or "*" or "/" or "\\" or "%" or "&&")
+            while (Current.Value is "^" or "*" or "/" or "\\" or "%")
             {
                 var opToken = Advance();
                 var right = ParseFactor();
@@ -788,7 +863,7 @@ namespace CompilerProject.SyntaxAnalysis
 
         private static bool IsRelationalOperator(string op)
         {
-            return op is "==" or "!=" or "<" or ">" or "<=" or ">=";
+            return op is "==" or "!=" or "<" or ">" or "<=" or ">=" or "=";
         }
     }
 }

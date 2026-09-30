@@ -19,7 +19,7 @@ namespace CompilerProject.CodeGeneration
     /// </summary>
     public class CompilerRunner
     {
-        public static CompilationResult Compile(string sourceCode, bool isVerbose = true, string userInput = "")
+        public static CompilationResult Compile(string sourceCode, bool isVerbose = true, string userInput = "", bool runInterpreter = false)
         {
             Console.OutputEncoding = Encoding.UTF8;
             var result = new CompilationResult { SourceCode = sourceCode };
@@ -132,30 +132,29 @@ namespace CompilerProject.CodeGeneration
                 if (isVerbose)
                 {
                     Console.WriteLine("   ✔️ تم توليد ملف output.asm و output.il بنجاح.");
-                    Console.WriteLine("\n🚀 جاري تجميع ملف output.il إلى ملف تنفيذي output.exe عبر ilasm...");
                 }
 
-                bool compiled = asmGen.CompileToExe("output.il", "output.exe");
-                if (compiled)
+                // تنفيذ البرنامج عبر مفسر TAC إذا طُلب ذلك صراحة (لتفادي أي تجميد أثناء التحليل المباشر)
+                if (runInterpreter)
                 {
-                    result.ExecutionOutput = asmGen.RunExe("output.exe", userInput);
-                    result.IsSuccess = true;
+                    var interpreter = new TACInterpreter(tacList, userInput);
+                    result.ExecutionOutput = interpreter.Execute();
+
                     if (isVerbose)
                     {
-                        Console.WriteLine("   ✔️ تم إنتاج الملف التنفيذي output.exe بنجاح!\n");
                         Console.WriteLine("═══════════════════════════════════════════════════════════");
-                        Console.WriteLine("🖥️  مخرجات تشغيل البرنامج التنفيذي (Actual Execution Output):");
+                        Console.WriteLine("🖥️  مخرجات تشغيل البرنامج (Execution Output):");
                         Console.WriteLine("═══════════════════════════════════════════════════════════");
                         Console.WriteLine(result.ExecutionOutput);
                         Console.WriteLine("═══════════════════════════════════════════════════════════\n");
                         Console.WriteLine("🎉 اكتملت جميع مراحل الترجمة والتشغيل بنجاح تام!");
                     }
                 }
-                else
+                else if (isVerbose)
                 {
-                    result.IsSuccess = false;
-                    if (isVerbose) Console.WriteLine("⚠️ تعذر التجميع المباشر عبر ilasm.");
+                    Console.WriteLine("🎉 اكتملت جميع مراحل الترجمة وبناء الكود بنجاح تام!");
                 }
+                result.IsSuccess = true;
             }
             catch (Exception ex)
             {

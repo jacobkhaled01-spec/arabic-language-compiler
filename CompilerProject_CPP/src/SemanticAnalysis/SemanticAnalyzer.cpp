@@ -5,8 +5,17 @@ namespace CompilerCPP {
     SemanticAnalyzer::SemanticAnalyzer(SymbolTable& symbolTable)
         : _symbolTable(symbolTable) {}
 
+    void SemanticAnalyzer::AddError(const std::string& err) {
+        if (std::find(_errors.begin(), _errors.end(), err) == _errors.end()) {
+            _errors.push_back(err);
+        }
+    }
+
     bool SemanticAnalyzer::Analyze(const std::shared_ptr<Node>& root) {
         _errors.clear();
+        _procedureSignatures.clear();
+        _arrayTypeSizes.clear();
+        _arrayVarSizes.clear();
         if (!root) return false;
 
         // تسجيل اسم البرنامج
@@ -37,6 +46,9 @@ namespace CompilerCPP {
                 if (!_symbolTable.Add(node->Name, "مصفوفة", "نوع_مصفوفة", node->Line, "حجم=" + node->Val + ", عنصر=" + node->DataType)) {
                     _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف النوع '" + node->Name + "'");
                 }
+                try {
+                    _arrayTypeSizes[node->Name] = std::stoll(node->Val);
+                } catch (...) {}
             } else if (node->Value == "TypeDecl_Record") {
                 if (!_symbolTable.Add(node->Name, "سجل", "نوع_سجل", node->Line, "-")) {
                     _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف النوع '" + node->Name + "'");
@@ -46,6 +58,9 @@ namespace CompilerCPP {
                     if (currentProc.empty()) {
                         _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف المتغير '" + node->Name + "' في نفس النطاق");
                     }
+                }
+                if (_arrayTypeSizes.find(node->DataType) != _arrayTypeSizes.end()) {
+                    _arrayVarSizes[node->Name] = _arrayTypeSizes[node->DataType];
                 }
             } else if (node->Value == "ProcedureDecl") {
                 currentProc = node->Name;
@@ -59,6 +74,9 @@ namespace CompilerCPP {
                             if (pNode && pNode->Value == "ParamDecl") {
                                 params.push_back({ pNode->Name, pNode->DataType, pNode->Val });
                                 _symbolTable.Add(pNode->Name, pNode->DataType, "معامل_" + pNode->Val, pNode->Line, "-");
+                                if (_arrayTypeSizes.find(pNode->DataType) != _arrayTypeSizes.end()) {
+                                    _arrayVarSizes[pNode->Name] = _arrayTypeSizes[pNode->DataType];
+                                }
                             }
                         }
                     }
@@ -66,6 +84,9 @@ namespace CompilerCPP {
                 _procedureSignatures[node->Name] = params;
             } else if (node->Value == "ParamDecl") {
                 _symbolTable.Add(node->Name, node->DataType, "معامل_" + node->Val, node->Line, "معامل إجرائي");
+                if (_arrayTypeSizes.find(node->DataType) != _arrayTypeSizes.end()) {
+                    _arrayVarSizes[node->Name] = _arrayTypeSizes[node->DataType];
+                }
             }
 
             for (const auto& child : node->Children) {
@@ -80,10 +101,27 @@ namespace CompilerCPP {
     void SemanticAnalyzer::CheckExpressionVariables(const std::shared_ptr<Node>& exprNode) {
         if (!exprNode) return;
 
+        if (exprNode->Value == "IndexedAccess") {
+            if (!exprNode->Children.empty()) {
+                std::string rootName = exprNode->Children[0]->Name;
+                if (_arrayVarSizes.find(rootName) != _arrayVarSizes.end()) {
+                    long long maxSz = _arrayVarSizes[rootName];
+                    if (exprNode->Children.size() > 1 && exprNode->Children[1]->Value == "Number") {
+                        try {
+                            long long idx = std::stoll(exprNode->Children[1]->Val);
+                            if (idx < 1 || idx > maxSz) {
+                                AddError("خطأ دلالي في السطر " + std::to_string(exprNode->Line) + ": تجاوز حدود المصفوفة '" + rootName + "'! الفهرس [" + std::to_string(idx) + "] خارج النطاق المسموح به [1 .. " + std::to_string(maxSz) + "]");
+                            }
+                        } catch (...) {}
+                    }
+                }
+            }
+        }
+
         if (exprNode->Value == "Variable") {
             auto sym = _symbolTable.Lookup(exprNode->Name);
             if (!sym) {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(exprNode->Line) + ": استخدام المعرف غير المعرف '" + exprNode->Name + "' في التعبير الحسابي");
+                AddError("خطأ دلالي في السطر " + std::to_string(exprNode->Line) + ": استخدام المعرف غير المعرف '" + exprNode->Name + "' في التعبير الحسابي");
             } else {
                 _symbolTable.AddReference(exprNode->Name, exprNode->Line);
             }
@@ -100,9 +138,9 @@ namespace CompilerCPP {
         if (node->Value == "Assign") {
             auto sym = _symbolTable.Lookup(node->Name);
             if (!sym) {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": محاولة إسناد قيمة للمتغير غير المعرف '" + node->Name + "'");
+                AddError("خطأ دلالي في السطر " + std::to_string(node->Line) + ": محاولة إسناد قيمة للمتغير غير المعرف '" + node->Name + "'");
             } else if (sym->Kind == "ثابت") {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": لا يمكن تغيير قيمة الثابت '" + node->Name + "'");
+                AddError("خطأ دلالي في السطر " + std::to_string(node->Line) + ": لا يمكن تغيير قيمة الثابت '" + node->Name + "'");
             }
             _symbolTable.AddReference(node->Name, node->Line);
 
@@ -111,28 +149,46 @@ namespace CompilerCPP {
             }
         } else if (node->Value == "Variable") {
             if (!_symbolTable.Contains(node->Name)) {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": استخدام المعرف غير المعرف '" + node->Name + "'");
+                AddError("خطأ دلالي في السطر " + std::to_string(node->Line) + ": استخدام المعرف غير المعرف '" + node->Name + "'");
             } else {
                 _symbolTable.AddReference(node->Name, node->Line);
             }
         } else if (node->Value == "ReadStatement") {
-            auto validateVar = [&](const std::string& varName, int lineNum) {
-                if (varName.empty()) return;
-                auto sym = _symbolTable.Lookup(varName);
-                if (!sym) {
-                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(lineNum) + ": محاولة القراءة إلى متغير غير معرف '" + varName + "'");
-                } else if (sym->Kind == "ثابت") {
-                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(lineNum) + ": لا يمكن القراءة إلى الثابت '" + varName + "'");
+            auto validateVarNode = [&](const std::shared_ptr<Node>& targetNode) {
+                if (!targetNode) return;
+                std::string rootName = targetNode->Name;
+                if (targetNode->Value == "FieldAccess" || targetNode->Value == "IndexedAccess") {
+                    if (!targetNode->Children.empty()) {
+                        rootName = targetNode->Children[0]->Name;
+                    }
+                    if (targetNode->Value == "IndexedAccess" && _arrayVarSizes.find(rootName) != _arrayVarSizes.end()) {
+                        long long maxSz = _arrayVarSizes[rootName];
+                        if (targetNode->Children.size() > 1 && targetNode->Children[1]->Value == "Number") {
+                            try {
+                                long long idx = std::stoll(targetNode->Children[1]->Val);
+                                if (idx < 1 || idx > maxSz) {
+                                    AddError("خطأ دلالي في السطر " + std::to_string(targetNode->Line) + ": تجاوز حدود المصفوفة '" + rootName + "'! الفهرس [" + std::to_string(idx) + "] خارج النطاق المسموح به [1 .. " + std::to_string(maxSz) + "]");
+                                }
+                            } catch (...) {}
+                        }
+                    }
                 }
-                _symbolTable.AddReference(varName, lineNum);
+                if (rootName.empty()) return;
+                auto sym = _symbolTable.Lookup(rootName);
+                if (!sym) {
+                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(targetNode->Line) + ": محاولة القراءة إلى متغير غير معرف '" + rootName + "'");
+                } else if (sym->Kind == "ثابت") {
+                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(targetNode->Line) + ": لا يمكن القراءة إلى الثابت '" + rootName + "'");
+                }
+                _symbolTable.AddReference(rootName, targetNode->Line);
             };
 
             if (!node->Children.empty()) {
                 for (const auto& child : node->Children) {
-                    validateVar(child->Name, child->Line);
+                    validateVarNode(child);
                 }
             } else if (!node->Name.empty()) {
-                validateVar(node->Name, node->Line);
+                validateVarNode(node);
             }
         } else if (node->Value == "ForStatement") {
             if (!_symbolTable.Contains(node->Name)) {

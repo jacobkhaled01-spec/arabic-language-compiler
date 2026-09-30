@@ -18,10 +18,11 @@ namespace CompilerProject.LexicalAnalysis
     {
         private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "برنامج", "ثابت", "نوع", "قائمة", "من", "سجل", "متغير", "اجراء",
+            "برنامج", "ثابت", "نوع", "قائمة", "من", "سجل", "متغير", "اجراء", "إجراء", "دالة", "داله",
             "بالقيمة", "بالمرجع", "صحيح", "حقيقي", "منطقي", "حرفي", "خيط_رمزي",
-            "صح", "خطأ", "اقرا", "اقرأ", "اقرء", "اطبع", "اذا", "فان", "والا", "طالما", "استمر",
-            "اعد", "حتى", "كرر", "الى", "اضف"
+            "صح", "صواب", "خطأ", "خطا", "اقرا", "اقرأ", "اقرء", "اطبع", "أطبع", "اذا", "إذا", "فان", "فأن", "فإن", "فافعل", "والا", "طالما", "استمر",
+            "اعد", "أعد", "حتى", "كرر", "الى", "إلى", "اضف", "أضف", "ارجع",
+            "ابدأ", "ابدا", "النهاية"
         };
 
         private readonly string _source;
@@ -212,8 +213,31 @@ namespace CompilerProject.LexicalAnalysis
 
             string text = sb.ToString();
             TokenType type = Keywords.Contains(text) ? TokenType.Keyword : TokenType.Identifier;
+            if (type == TokenType.Keyword)
+            {
+                text = CanonicalizeKeyword(text);
+            }
 
             return new Token(text, type, startLine);
+        }
+
+        private static string CanonicalizeKeyword(string kw)
+        {
+            return kw switch
+            {
+                "إذا" => "اذا",
+                "إلى" => "الى",
+                "أضف" => "اضف",
+                "أعد" => "اعد",
+                "أطبع" => "اطبع",
+                "إجراء" or "داله" => "اجراء",
+                "فأن" or "فإن" or "فافعل" => "فان",
+                "اقرأ" or "اقرء" => "اقرا",
+                "خطا" => "خطأ",
+                "صواب" => "صح",
+                "ابدا" => "ابدأ",
+                _ => kw
+            };
         }
 
         private static bool IsDigitChar(char c)
@@ -232,11 +256,15 @@ namespace CompilerProject.LexicalAnalysis
 
         private static bool IsIdentifierStart(char c)
         {
-            return char.IsLetter(c) || c == '_' || (c >= '\u0600' && c <= '\u06FF');
+            if (c is '؛' or ';' or '،' or ',' or '؟' or '?' or '٪' or '٫' or '٬' or ':' or '.' or '{' or '}' or '(' or ')' or '[' or ']' or '=' or '+' or '-' or '*' or '/' or '\\' or '^' or '!' or '<' or '>' or '&' or '|' or '"' or '\'' or '’' or '‘' or '“' or '”')
+                return false;
+            return char.IsLetter(c) || c == '_' || (c >= '\u0600' && c <= '\u06FF' && !char.IsPunctuation(c) && !char.IsSymbol(c));
         }
 
         private static bool IsIdentifierPart(char c)
         {
+            if (c is '؛' or ';' or '،' or ',' or '؟' or '?' or '٪' or '٫' or '٬' or ':' or '.' or '{' or '}' or '(' or ')' or '[' or ']' or '=' or '+' or '-' or '*' or '/' or '\\' or '^' or '!' or '<' or '>' or '&' or '|' or '"' or '\'' or '’' or '‘' or '“' or '”')
+                return false;
             return IsIdentifierStart(c) || IsDigitChar(c);
         }
     }

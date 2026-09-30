@@ -14,6 +14,8 @@ namespace CompilerProject.SemanticAnalysis
     {
         private readonly SymbolTable _symbolTable;
         private readonly List<string> _errors = new List<string>();
+        private readonly Dictionary<string, long> _arrayTypeSizes = new();
+        private readonly Dictionary<string, long> _arrayVarSizes = new();
 
         public SemanticAnalyzer(SymbolTable symbolTable)
         {
@@ -22,12 +24,22 @@ namespace CompilerProject.SemanticAnalysis
 
         public IReadOnlyList<string> Errors => _errors;
 
+        private void AddError(string err)
+        {
+            if (!_errors.Contains(err))
+            {
+                _errors.Add(err);
+            }
+        }
+
         /// <summary>
         /// تحليل شجرة الإعراب المجردة (AST) دلالياً
         /// </summary>
         public bool Analyze(Node rootNode)
         {
             _errors.Clear();
+            _arrayTypeSizes.Clear();
+            _arrayVarSizes.Clear();
 
             if (rootNode == null) return false;
 
@@ -36,9 +48,17 @@ namespace CompilerProject.SemanticAnalysis
             return _errors.Count == 0;
         }
 
+        private string _currentProc = "";
+
         private void TraverseAndAnalyze(Node node)
         {
             if (node == null) return;
+
+            string prevProc = _currentProc;
+            if (node.Value is "ProcDecl" or "ProcedureDecl")
+            {
+                _currentProc = node.Name;
+            }
 
             switch (node.Value)
             {
@@ -51,20 +71,62 @@ namespace CompilerProject.SemanticAnalysis
                     // تسجيل الثابت
                     if (!_symbolTable.Add(node.Name, InferLiteralType(node.Val), "ثابت", node.Line, node.Val))
                     {
-                        _errors.Add($"خطأ دلالي في السطر {node.Line}: إعادة تعريف الثابت '{node.Name}'");
+                        AddError($"خطأ دلالي في السطر {node.Line}: إعادة تعريف الثابت '{node.Name}'");
                     }
                     break;
 
                 case "VarDecl":
+                    if (_arrayTypeSizes.TryGetValue(node.DataType, out long varSize))
+                    {
+                        _arrayVarSizes[node.Name] = varSize;
+                    }
                     // تسجيل المتغير
                     if (!_symbolTable.Add(node.Name, node.DataType, "متغير", node.Line))
                     {
-                        _errors.Add($"خطأ دلالي في السطر {node.Line}: إعادة تعريف المتغير '{node.Name}'");
+                        if (string.IsNullOrEmpty(_currentProc))
+                        {
+                            AddError($"خطأ دلالي في السطر {node.Line}: إعادة تعريف المتغير '{node.Name}'");
+                        }
+                    }
+                    break;
+
+                case "Param":
+                case "ParamDecl":
+                case "FormalParam":
+                    string paramRole = !string.IsNullOrEmpty(node.Val) ? $"معامل_{node.Val}" : "معامل";
+                    _symbolTable.Add(node.Name, node.DataType, paramRole, node.Line, "معامل إجرائي");
+                    if (_arrayTypeSizes.TryGetValue(node.DataType, out long pSize))
+                    {
+                        _arrayVarSizes[node.Name] = pSize;
                     }
                     break;
 
                 case "TypeDecl_Array":
+                    if (long.TryParse(node.Val, out long arrSize))
+                    {
+                        _arrayTypeSizes[node.Name] = arrSize;
+                    }
                     _symbolTable.Add(node.Name, $"قائمة من {node.DataType}", "نوع_قائمة", node.Line, $"حجم={node.Val}");
+                    break;
+
+                case "IndexedAccess":
+                    if (node.Children.Count > 0)
+                    {
+                        string rootName = node.Children[0].Name;
+                        if (_arrayVarSizes.TryGetValue(rootName, out long maxSz))
+                        {
+                            if (node.Children.Count > 1 && node.Children[1].Value == "Number")
+                            {
+                                if (long.TryParse(node.Children[1].Val, out long idx))
+                                {
+                                    if (idx < 1 || idx > maxSz)
+                                    {
+                                        AddError($"خطأ دلالي في السطر {node.Line}: تجاوز حدود المصفوفة '{rootName}'! الفهرس [{idx}] خارج النطاق المسموح به [1 .. {maxSz}]");
+                                    }
+                                }
+                            }
+                        }
+                    }
                     break;
 
                 case "TypeDecl_Record":
@@ -109,6 +171,8 @@ namespace CompilerProject.SemanticAnalysis
             {
                 TraverseAndAnalyze(child);
             }
+
+            _currentProc = prevProc;
         }
 
         private void ValidateIdentifierUsage(string name, int line)

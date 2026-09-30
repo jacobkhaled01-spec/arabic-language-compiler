@@ -34,6 +34,7 @@ namespace CompilerCPP {
         std::shared_ptr<Node> ParseForStatement();
         std::shared_ptr<Node> ParsePrintStatement();
         std::shared_ptr<Node> ParseReadStatement();
+        std::shared_ptr<Node> ParseVariableAccess();
 
         std::shared_ptr<Node> ParseExpression();
         std::shared_ptr<Node> ParseLogicalOr();

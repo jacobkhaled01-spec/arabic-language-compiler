@@ -228,12 +228,49 @@ namespace CompilerCPP {
                 while (!indexStr.empty() && indexStr.front() == ' ') indexStr.erase(indexStr.begin());
                 while (!indexStr.empty() && indexStr.back() == ' ') indexStr.pop_back();
 
+                std::string baseArray = arrayName;
                 if (_aliases.find(arrayName) != _aliases.end()) {
                     arrayName = _aliases[arrayName];
                 }
 
                 double idxVal = EvaluateExpr(indexStr);
                 long long idxInt = static_cast<long long>(std::round(idxVal));
+
+                // فحص حدود المصفوفة التشغيلي العام الصارم (Runtime Array Bounds Checking)
+                long long maxBound = -1;
+                if (_arrayBounds.find(arrayName) != _arrayBounds.end()) {
+                    maxBound = _arrayBounds[arrayName];
+                } else if (_arrayBounds.find(baseArray) != _arrayBounds.end()) {
+                    maxBound = _arrayBounds[baseArray];
+                } else {
+                    size_t uPos = arrayName.find('_');
+                    if (uPos != std::string::npos) {
+                        std::string unq = arrayName.substr(uPos + 1);
+                        if (_arrayBounds.find(unq) != _arrayBounds.end()) {
+                            maxBound = _arrayBounds[unq];
+                        }
+                    }
+                    if (maxBound <= 0) {
+                        size_t buPos = baseArray.find('_');
+                        if (buPos != std::string::npos) {
+                            std::string bunq = baseArray.substr(buPos + 1);
+                            if (_arrayBounds.find(bunq) != _arrayBounds.end()) {
+                                maxBound = _arrayBounds[bunq];
+                            }
+                        }
+                    }
+                }
+
+                if (maxBound > 0 && (idxInt < 1 || idxInt > maxBound)) {
+                    std::string errMsg = "\n❌ [خطأ تشغيلي - Runtime Error]: تجاوز حدود المصفوفة (Index Out of Bounds)!\n"
+                                         "   الفهرس [" + std::to_string(idxInt) + "] يقع خارج نطاق المصفوفة '" + baseArray +
+                                         "' المصرح بها بحجم [" + std::to_string(maxBound) + "] (النطاق الصالح: 1 .. " + std::to_string(maxBound) + ").\n";
+                    if (_isInteractive) {
+                        WriteToConsoleUnicode(errMsg);
+                    }
+                    throw std::runtime_error(errMsg);
+                }
+
                 return arrayName + "[" + std::to_string(idxInt) + "]";
             }
         }
@@ -258,8 +295,8 @@ namespace CompilerCPP {
         }
 
         // Try boolean
-        if (s == "صواب" || s == "true") return 1.0;
-        if (s == "خطأ" || s == "false") return 0.0;
+        if (s == "صواب" || s == "true" || s == "صح") return 1.0;
+        if (s == "خطأ" || s == "false" || s == "خطا") return 0.0;
 
         // Binary operators check (checked first so comparisons like a[i] > a[j] evaluate correctly)
         static const std::vector<std::string> ops = { "==", "!=", "<=", ">=", "<", ">", "&&", "||", "+", "-", "*", "/", "\\", "%", "^" };
@@ -275,7 +312,8 @@ namespace CompilerCPP {
                 if (op == "+")  return leftVal + rightVal;
                 if (op == "-")  return leftVal - rightVal;
                 if (op == "*")  return leftVal * rightVal;
-                if (op == "/" || op == "\\") return (rightVal != 0.0) ? (leftVal / rightVal) : 0.0;
+                if (op == "/")  return (rightVal != 0.0) ? (leftVal / rightVal) : 0.0;
+                if (op == "\\") return (rightVal != 0.0) ? std::trunc(leftVal / rightVal) : 0.0;
                 if (op == "%")  return std::fmod(leftVal, rightVal != 0.0 ? rightVal : 1.0);
                 if (op == "^")  return std::pow(leftVal, rightVal);
                 if (op == "==") return (leftVal == rightVal) ? 1.0 : 0.0;
@@ -289,10 +327,19 @@ namespace CompilerCPP {
             }
         }
 
-        // Try variable (with dynamic array indexing)
         // Unary minus
         if (s.front() == '-') {
             return -EvaluateExpr(s.substr(1));
+        }
+
+        // Unary plus
+        if (s.front() == '+') {
+            return EvaluateExpr(s.substr(1));
+        }
+
+        // Unary not
+        if (s.front() == '!') {
+            return (EvaluateExpr(s.substr(1)) == 0.0) ? 1.0 : 0.0;
         }
 
         // Try variable (with dynamic array indexing)
@@ -320,6 +367,9 @@ namespace CompilerCPP {
         _labels.clear();
         _paramQueue.clear();
         _aliases.clear();
+        _arrayBounds.clear();
+        while (!_callStack.empty()) _callStack.pop();
+        while (!_aliasStack.empty()) _aliasStack.pop();
 
         // 1. جمع الملصقات Labels
         for (size_t i = 0; i < _tac.size(); ++i) {
@@ -334,27 +384,57 @@ namespace CompilerCPP {
         }
 
         std::ostringstream output;
-        size_t pc = 0;
-        while (pc < _tac.size()) {
-            std::string line = _tac[pc];
-            while (!line.empty() && line.front() == ' ') line.erase(line.begin());
-            while (!line.empty() && line.back() == ' ') line.pop_back();
+        try {
+            size_t pc = 0;
+            while (pc < _tac.size()) {
+                std::string line = _tac[pc];
+                while (!line.empty() && line.front() == ' ') line.erase(line.begin());
+                while (!line.empty() && line.back() == ' ') line.pop_back();
 
-            if (line.empty() || line.rfind("//", 0) == 0 || line.back() == ':') {
-                pc++;
-                continue;
-            }
+                if (line.empty() || line.rfind("//", 0) == 0 || line.back() == ':') {
+                    pc++;
+                    continue;
+                }
 
-            // Print Raw (no newline)
-            if (line.rfind("print_raw ", 0) == 0) {
-                std::string arg = line.substr(10);
-                while (!arg.empty() && arg.front() == ' ') arg.erase(arg.begin());
+                // alloc_array <name> <capacity>
+                if (line.rfind("alloc_array ", 0) == 0) {
+                    std::string rest = line.substr(12);
+                    while (!rest.empty() && rest.front() == ' ') rest.erase(rest.begin());
+                    while (!rest.empty() && rest.back() == ' ') rest.pop_back();
+                    size_t sp = rest.find(' ');
+                    if (sp != std::string::npos) {
+                        std::string arrName = rest.substr(0, sp);
+                        std::string sizeStr = rest.substr(sp + 1);
+                        while (!arrName.empty() && arrName.back() == ' ') arrName.pop_back();
+                        while (!sizeStr.empty() && sizeStr.front() == ' ') sizeStr.erase(sizeStr.begin());
+                        try {
+                            long long sz = std::stoll(sizeStr);
+                            _arrayBounds[arrName] = sz;
+                            size_t uPos = arrName.find('_');
+                            if (uPos != std::string::npos) {
+                                _arrayBounds[arrName.substr(uPos + 1)] = sz;
+                            }
+                        } catch (...) {}
+                    }
+                    pc++;
+                    continue;
+                }
+
+                // Print Raw (no newline)
+                if (line.rfind("print_raw ", 0) == 0) {
+                    std::string arg = line.substr(10);
+                    while (!arg.empty() && arg.front() == ' ') arg.erase(arg.begin());
                 while (!arg.empty() && arg.back() == ' ') arg.pop_back();
 
                 std::string lineOut;
                 std::string resolvedArg = ResolveArrayName(arg);
-                if (arg.size() >= 2 && arg.front() == '"' && arg.back() == '"') {
+                if ((arg.size() >= 2 && arg.front() == '"' && arg.back() == '"') ||
+                    (arg.size() >= 2 && arg.front() == '\'' && arg.back() == '\'')) {
                     lineOut = arg.substr(1, arg.size() - 2);
+                } else if (_stringVars.find(resolvedArg) != _stringVars.end()) {
+                    lineOut = _stringVars[resolvedArg];
+                } else if (_stringVars.find(arg) != _stringVars.end()) {
+                    lineOut = _stringVars[arg];
                 } else if (_variables.find(resolvedArg) != _variables.end()) {
                     double v = _variables[resolvedArg];
                     if (v == std::floor(v)) {
@@ -384,8 +464,13 @@ namespace CompilerCPP {
 
                 std::string lineOut;
                 std::string resolvedArg = ResolveArrayName(arg);
-                if (arg.size() >= 2 && arg.front() == '"' && arg.back() == '"') {
+                if ((arg.size() >= 2 && arg.front() == '"' && arg.back() == '"') ||
+                    (arg.size() >= 2 && arg.front() == '\'' && arg.back() == '\'')) {
                     lineOut = arg.substr(1, arg.size() - 2);
+                } else if (_stringVars.find(resolvedArg) != _stringVars.end()) {
+                    lineOut = _stringVars[resolvedArg];
+                } else if (_stringVars.find(arg) != _stringVars.end()) {
+                    lineOut = _stringVars[arg];
                 } else if (_variables.find(resolvedArg) != _variables.end()) {
                     double v = _variables[resolvedArg];
                     if (v == std::floor(v)) {
@@ -413,6 +498,8 @@ namespace CompilerCPP {
                 while (!target.empty() && target.front() == ' ') target.erase(target.begin());
                 while (!target.empty() && target.back() == ' ') target.pop_back();
                 _callStack.push(pc + 1);
+                _aliasStack.push(_aliases);
+                _aliases.clear();
                 if (_labels.find(target) != _labels.end()) {
                     pc = _labels[target];
                 } else {
@@ -421,7 +508,12 @@ namespace CompilerCPP {
             }
             // Return
             else if (line == "return") {
-                _aliases.clear();
+                if (!_aliasStack.empty()) {
+                    _aliases = _aliasStack.top();
+                    _aliasStack.pop();
+                } else {
+                    _aliases.clear();
+                }
                 if (!_callStack.empty()) {
                     pc = _callStack.top();
                     _callStack.pop();
@@ -465,10 +557,23 @@ namespace CompilerCPP {
                 dest = ResolveArrayName(dest);
 
                 double val = 0.0;
+                bool isStringInput = false;
+                std::string strVal = "";
                 if (_inputIndex < _inputTokens.size()) {
                     std::string tok = _inputTokens[_inputIndex++];
-                    if (!TryParseAndSanitizeNumber(tok, val)) {
-                        val = EvaluateExpr(tok);
+                    if (tok.size() >= 2 && ((tok.front() == '"' && tok.back() == '"') || (tok.front() == '\'' && tok.back() == '\''))) {
+                        isStringInput = true;
+                        strVal = tok.substr(1, tok.size() - 2);
+                    } else if (TryParseAndSanitizeNumber(tok, val)) {
+                        isStringInput = false;
+                    } else {
+                        double evalVal = EvaluateExpr(tok);
+                        if (evalVal != 0.0 || tok == "0" || tok == "0.0") {
+                            val = evalVal;
+                        } else {
+                            isStringInput = true;
+                            strVal = tok;
+                        }
                     }
                 } else if (_isInteractive) {
                     std::string prompt = ">> [اقرا] ادخل قيمة لـ (" + dest + "): ";
@@ -482,11 +587,15 @@ namespace CompilerCPP {
                         while (!trimmed.empty() && ((unsigned char)trimmed.back() <= 32)) trimmed.pop_back();
 
                         if (trimmed.empty()) {
-                            WriteToConsoleUnicode("⚠️ [تنبيه] لم تقم بإدخال أي قيمة! يرجى إدخال قيمة عددية:\n");
+                            WriteToConsoleUnicode("⚠️ [تنبيه] لم تقم بإدخال أي قيمة! يرجى إدخال قيمة عددية أو نصية:\n");
                             continue;
                         }
 
-                        if (TryParseAndSanitizeNumber(trimmed, val)) {
+                        if (trimmed.size() >= 2 && ((trimmed.front() == '"' && trimmed.back() == '"') || (trimmed.front() == '\'' && trimmed.back() == '\''))) {
+                            isStringInput = true;
+                            strVal = trimmed.substr(1, trimmed.size() - 2);
+                            inputAccepted = true;
+                        } else if (TryParseAndSanitizeNumber(trimmed, val)) {
                             inputAccepted = true;
                         } else {
                             double evalVal = EvaluateExpr(trimmed);
@@ -494,7 +603,9 @@ namespace CompilerCPP {
                                 val = evalVal;
                                 inputAccepted = true;
                             } else {
-                                WriteToConsoleUnicode("⚠️ [خطأ في الإدخال] القيمة المدخلة (\"" + trimmed + "\") غير صحيحة! يرجى إدخال رقم صحيح:\n");
+                                isStringInput = true;
+                                strVal = trimmed;
+                                inputAccepted = true;
                             }
                         }
                     }
@@ -502,7 +613,27 @@ namespace CompilerCPP {
                     // في وضع الترجمة المسبقة (Dry-Run) دون إدخال تفاعلي: إنهاء المحاكاة بسلام لعدم توفر مدخلات
                     break;
                 }
-                _variables[dest] = val;
+
+                if (isStringInput) {
+                    _stringVars[dest] = strVal;
+                    _variables[dest] = 0.0;
+                    if (_aliases.find(dest) != _aliases.end()) {
+                        std::string targetVar = ResolveArrayName(_aliases[dest]);
+                        if (targetVar != dest) {
+                            _stringVars[targetVar] = strVal;
+                        }
+                    }
+                } else {
+                    _variables[dest] = val;
+                    _stringVars.erase(dest);
+                    if (_aliases.find(dest) != _aliases.end()) {
+                        std::string targetVar = ResolveArrayName(_aliases[dest]);
+                        if (targetVar != dest) {
+                            _variables[targetVar] = val;
+                            _stringVars.erase(targetVar);
+                        }
+                    }
+                }
                 pc++;
             }
             // Param
@@ -510,10 +641,46 @@ namespace CompilerCPP {
                 std::string arg = line.substr(6);
                 while (!arg.empty() && arg.front() == ' ') arg.erase(arg.begin());
                 while (!arg.empty() && arg.back() == ' ') arg.pop_back();
+                arg = ResolveArrayName(arg);
+                if (_aliases.find(arg) != _aliases.end()) {
+                    arg = _aliases[arg];
+                }
                 _paramQueue.push_back(arg);
                 pc++;
             }
-            // Pop param: dest = pop_param
+            // Pop param by reference: dest = pop_param_ref
+            else if (line.find("= pop_param_ref") != std::string::npos) {
+                size_t eqPos = line.find("=");
+                std::string dest = line.substr(0, eqPos);
+                while (!dest.empty() && dest.front() == ' ') dest.erase(dest.begin());
+                while (!dest.empty() && dest.back() == ' ') dest.pop_back();
+                if (!_paramQueue.empty()) {
+                    std::string actual = _paramQueue.front();
+                    _paramQueue.pop_front();
+                    bool isIdent = !actual.empty() &&
+                                   ((unsigned char)actual[0] > 127 || std::isalpha((unsigned char)actual[0]) || actual[0] == '_');
+                    if (isIdent) {
+                        _aliases[dest] = actual;
+                        if (_arrayBounds.find(actual) != _arrayBounds.end()) {
+                            _arrayBounds[dest] = _arrayBounds[actual];
+                        } else {
+                            size_t uPos = actual.find('_');
+                            if (uPos != std::string::npos) {
+                                std::string unq = actual.substr(uPos + 1);
+                                if (_arrayBounds.find(unq) != _arrayBounds.end()) {
+                                    _arrayBounds[dest] = _arrayBounds[unq];
+                                }
+                            }
+                        }
+                    }
+                    _variables[dest] = EvaluateExpr(actual);
+                    if (_stringVars.find(actual) != _stringVars.end()) {
+                        _stringVars[dest] = _stringVars[actual];
+                    }
+                }
+                pc++;
+            }
+            // Pop param by value: dest = pop_param
             else if (line.find("= pop_param") != std::string::npos) {
                 size_t eqPos = line.find("=");
                 std::string dest = line.substr(0, eqPos);
@@ -522,8 +689,46 @@ namespace CompilerCPP {
                 if (!_paramQueue.empty()) {
                     std::string actual = _paramQueue.front();
                     _paramQueue.pop_front();
-                    _aliases[dest] = actual;
+                    // Call-by-value: NO ALIAS is created, isolating the caller's variable
+                    if (_arrayBounds.find(actual) != _arrayBounds.end()) {
+                        _arrayBounds[dest] = _arrayBounds[actual];
+                    } else {
+                        size_t uPos = actual.find('_');
+                        if (uPos != std::string::npos) {
+                            std::string unq = actual.substr(uPos + 1);
+                            if (_arrayBounds.find(unq) != _arrayBounds.end()) {
+                                _arrayBounds[dest] = _arrayBounds[unq];
+                            }
+                        }
+                    }
                     _variables[dest] = EvaluateExpr(actual);
+                    if (_stringVars.find(actual) != _stringVars.end()) {
+                        _stringVars[dest] = _stringVars[actual];
+                    }
+
+                    // Deep copy array elements locally if actual was an array
+                    std::string prefix = actual + "[";
+                    std::vector<std::pair<std::string, double>> toCopyNum;
+                    for (const auto& kv : _variables) {
+                        if (kv.first.rfind(prefix, 0) == 0) {
+                            std::string suffix = kv.first.substr(actual.length());
+                            toCopyNum.push_back({dest + suffix, kv.second});
+                        }
+                    }
+                    for (const auto& p : toCopyNum) {
+                        _variables[p.first] = p.second;
+                    }
+
+                    std::vector<std::pair<std::string, std::string>> toCopyStr;
+                    for (const auto& kv : _stringVars) {
+                        if (kv.first.rfind(prefix, 0) == 0) {
+                            std::string suffix = kv.first.substr(actual.length());
+                            toCopyStr.push_back({dest + suffix, kv.second});
+                        }
+                    }
+                    for (const auto& p : toCopyStr) {
+                        _stringVars[p.first] = p.second;
+                    }
                 }
                 pc++;
             }
@@ -534,23 +739,58 @@ namespace CompilerCPP {
                 while (!dest.empty() && dest.back() == ' ') dest.pop_back();
                 while (!dest.empty() && dest.front() == ' ') dest.erase(dest.begin());
                 dest = ResolveArrayName(dest);
-                if (_aliases.find(dest) != _aliases.end()) {
-                    dest = _aliases[dest];
-                }
 
                 std::string expr = line.substr(eqPos + 1);
                 while (!expr.empty() && expr.front() == ' ') expr.erase(expr.begin());
                 while (!expr.empty() && expr.back() == ' ') expr.pop_back();
 
-                double res = EvaluateExpr(expr);
-                _variables[dest] = res;
+                // 1. فحص ما إذا كانت القيمة المسندة سلسلة نصية أو محرفاً
+                if ((expr.size() >= 2 && expr.front() == '"' && expr.back() == '"') ||
+                    (expr.size() >= 2 && expr.front() == '\'' && expr.back() == '\'')) {
+                    std::string strVal = expr.substr(1, expr.size() - 2);
+                    _stringVars[dest] = strVal;
+                    _variables[dest] = 0.0;
+                    if (_aliases.find(dest) != _aliases.end()) {
+                        std::string targetVar = ResolveArrayName(_aliases[dest]);
+                        if (targetVar != dest) _stringVars[targetVar] = strVal;
+                    }
+                } else if (_stringVars.find(expr) != _stringVars.end()) {
+                    std::string strVal = _stringVars[expr];
+                    _stringVars[dest] = strVal;
+                    _variables[dest] = 0.0;
+                    if (_aliases.find(dest) != _aliases.end()) {
+                        std::string targetVar = ResolveArrayName(_aliases[dest]);
+                        if (targetVar != dest) _stringVars[targetVar] = strVal;
+                    }
+                } else {
+                    double res = EvaluateExpr(expr);
+                    _variables[dest] = res;
+                    _stringVars.erase(dest);
+
+                    if (_aliases.find(dest) != _aliases.end()) {
+                        std::string targetVar = ResolveArrayName(_aliases[dest]);
+                        if (targetVar != dest) {
+                            _variables[targetVar] = res;
+                            _stringVars.erase(targetVar);
+                        }
+                    }
+                }
                 pc++;
             } else {
                 pc++;
             }
         }
-
-        return output.str();
+    } catch (const std::runtime_error& ex) {
+        output << ex.what();
+    } catch (const std::exception& ex) {
+        std::string errStr = std::string("\n❌ [خطأ تشغيلي غير متوقع]: ") + ex.what() + "\n";
+        output << errStr;
+        if (_isInteractive) {
+            WriteToConsoleUnicode(errStr);
+        }
     }
+
+    return output.str();
+}
 
 } // namespace CompilerCPP

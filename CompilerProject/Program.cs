@@ -30,12 +30,29 @@ namespace CompilerProject
                 bool jsonMode = args.Length > 1 && (args[1] == "--json" || args[1] == "-j");
 
                 string userInput = "";
-                if (Console.IsInputRedirected)
+                for (int i = 1; i < args.Length; i++)
                 {
-                    try { userInput = Console.In.ReadToEnd(); } catch { }
+                    if (args[i] != "--json" && args[i] != "-j")
+                    {
+                        if (!string.IsNullOrEmpty(userInput)) userInput += " ";
+                        userInput += args[i];
+                    }
                 }
 
-                var result = CompilerRunner.Compile(sourceCode, !jsonMode, userInput);
+                if (string.IsNullOrEmpty(userInput) && Console.IsInputRedirected)
+                {
+                    try
+                    {
+                        var readTask = System.Threading.Tasks.Task.Run(() => Console.In.ReadToEnd());
+                        if (readTask.Wait(150))
+                        {
+                            userInput = readTask.Result;
+                        }
+                    }
+                    catch { }
+                }
+
+                var result = CompilerRunner.Compile(sourceCode, !jsonMode, userInput, runInterpreter: !jsonMode);
 
                 if (jsonMode)
                 {

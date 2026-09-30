@@ -61,6 +61,9 @@ namespace CompilerCPP {
     }
 
     void Parser::Synchronize() {
+        if (!IsAtEnd()) {
+            Advance();
+        }
         while (!IsAtEnd() && Current().Value != "}" && Current().Value != ".") {
             if (Current().Value == "؛") {
                 Advance();
@@ -68,7 +71,10 @@ namespace CompilerCPP {
             }
 
             if (Current().Value == "اذا" || Current().Value == "طالما" || Current().Value == "اعد" || Current().Value == "كرر" ||
-                Current().Value == "اطبع" || Current().Value == "اقرا" || Current().Value == "اقرأ" || Current().Value == "اقرء" || Current().Value == "متغير" || Current().Value == "ثابت" || Current().Value == "نوع") {
+                Current().Value == "اطبع" || Current().Value == "اقرا" || Current().Value == "اقرأ" || Current().Value == "اقرء" || 
+                Current().Value == "متغير" || Current().Value == "ثابت" || Current().Value == "نوع" ||
+                Current().Value == "استدعاء" || Current().Value == "نداء" ||
+                Current().Value == "اجراء" || Current().Value == "إجراء" || Current().Value == "دالة" || Current().Value == "داله") {
                 return;
             }
 
@@ -105,13 +111,13 @@ namespace CompilerCPP {
         auto blockNode = std::make_shared<Node>("Block", Current().Line);
         blockNode->AddChild(ParseDeclarations());
 
-        if (Current().Value == "{" || Current().Value == "}") {
+        if (Current().Value == "{" || Current().Value == "ابدأ" || Current().Value == "ابدا") {
             Advance();
         } else {
-            Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+            Expect("{", "يجب فتح قوس مجموعة '{' أو كتابة 'ابدأ' لبدء قائمة التعليمات");
         }
         blockNode->AddChild(ParseStatementList());
-        if (Current().Value == "}" || Current().Value == "{") {
+        if (Current().Value == "}" || Current().Value == "النهاية") {
             Advance();
         }
         return blockNode;
@@ -120,161 +126,169 @@ namespace CompilerCPP {
     std::shared_ptr<Node> Parser::ParseDeclarations() {
         auto declsNode = std::make_shared<Node>("Declarations", Current().Line);
 
-        // أ. تعريف الثوابت
-        while (Current().Value == "ثابت") {
-            try {
-                Advance();
-                auto constsNode = std::make_shared<Node>("ConstDeclarations", Current().Line);
-                while (Current().Type == TokenType::Identifier) {
-                    auto constName = Advance();
-                    Expect("=", "يجب وضع علامة '=' بعد اسم الثابت");
-                    
-                    std::string sign = "";
-                    if (Current().Value == "+" || Current().Value == "-") {
-                        sign = Advance().Value;
-                    }
+        bool progressed = true;
+        while (progressed) {
+            progressed = false;
 
-                    auto constVal = Advance();
-                    Expect("؛", "يجب إنهاء تعريف الثابت بفاصلة منقوطة '؛'");
-
-                    auto cNode = std::make_shared<Node>("ConstDecl", constName.Value, sign + constVal.Value, constName.Line);
-                    cNode->Val = sign + constVal.Value;
-                    constsNode->AddChild(cNode);
-                }
-                declsNode->AddChild(constsNode);
-            } catch (const std::exception& ex) {
-                std::string msg = ex.what();
-                bool exists = false;
-                for (const auto& e : Errors) if (e == msg) { exists = true; break; }
-                if (!exists) Errors.push_back(msg);
-                Synchronize();
-            }
-        }
-
-        // ب. تعريف الأنواع
-        while (Current().Value == "نوع") {
-            try {
-                Advance();
-                auto typesNode = std::make_shared<Node>("TypeDeclarations", Current().Line);
-                while (Current().Type == TokenType::Identifier) {
-                    auto typeName = Advance();
-                    Expect("=", "يجب وضع علامة '=' بعد اسم النوع");
-
-                    if (Current().Value == "قائمة") {
-                        Advance();
-                        Expect("[", "يجب فتح قوس مربع '[' لحجم القائمة");
-                        auto sizeToken = ExpectType(TokenType::Number, "يجب تحديد حجم القائمة كرقم");
-                        Expect("]", "يجب إغلاق القوس المربع ']'");
-                        Expect("من", "يجب كتابة كلمة 'من' لتحديد نوع عناصر القائمة");
-                        auto elemType = Advance();
-                        Expect("؛", "يجب إنهاء تعريف النوع بفاصلة منقوطة '؛'");
-
-                        auto arrayNode = std::make_shared<Node>("TypeDecl_Array", typeName.Value, elemType.Value, typeName.Line);
-                        arrayNode->Val = sizeToken.Value;
-                        typesNode->AddChild(arrayNode);
-                    } else if (Current().Value == "سجل") {
-                        Advance();
-                        Expect("{", "يجب فتح قوس مجموعة '{' لحقول السجل");
-                        auto recordNode = std::make_shared<Node>("TypeDecl_Record", typeName.Value, typeName.Line);
-
-                        while (Current().Type == TokenType::Identifier) {
-                            std::vector<std::string> fieldNames;
-                            fieldNames.push_back(Advance().Value);
-                            while (MatchComma()) {
-                                fieldNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم الحقل").Value);
-                            }
-                            Expect(":", "يجب وضع نقطتين ':' بعد أسماء الحقول");
-                            auto fieldType = Advance().Value;
-
-                            for (const auto& fName : fieldNames) {
-                                recordNode->AddChild(std::make_shared<Node>("FieldDecl", fName, fieldType, typeName.Line));
-                            }
-
-                            if (Current().Value == "؛") Advance();
+            // أ. تعريف الثوابت
+            if (Current().Value == "ثابت") {
+                progressed = true;
+                try {
+                    Advance();
+                    auto constsNode = std::make_shared<Node>("ConstDeclarations", Current().Line);
+                    while (Current().Type == TokenType::Identifier) {
+                        auto constName = Advance();
+                        Expect("=", "يجب وضع علامة '=' بعد اسم الثابت");
+                        
+                        std::string sign = "";
+                        if (Current().Value == "+" || Current().Value == "-") {
+                            sign = Advance().Value;
                         }
-                        Expect("}", "يجب إغلاق قوس المجموعة '}' للسجل");
-                        Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد تعريف السجل");
-                        typesNode->AddChild(recordNode);
+
+                        auto constVal = Advance();
+                        Expect("؛", "يجب إنهاء تعريف الثابت بفاصلة منقوطة '؛'");
+
+                        auto cNode = std::make_shared<Node>("ConstDecl", constName.Value, sign + constVal.Value, constName.Line);
+                        cNode->Val = sign + constVal.Value;
+                        constsNode->AddChild(cNode);
                     }
+                    declsNode->AddChild(constsNode);
+                } catch (const std::exception& ex) {
+                    std::string msg = ex.what();
+                    bool exists = false;
+                    for (const auto& e : Errors) if (e == msg) { exists = true; break; }
+                    if (!exists) Errors.push_back(msg);
+                    Synchronize();
                 }
-                declsNode->AddChild(typesNode);
-            } catch (const std::exception& ex) {
-                std::string msg = ex.what();
-                bool exists = false;
-                for (const auto& e : Errors) if (e == msg) { exists = true; break; }
-                if (!exists) Errors.push_back(msg);
-                Synchronize();
             }
-        }
+            // ب. تعريف الأنواع
+            else if (Current().Value == "نوع") {
+                progressed = true;
+                try {
+                    Advance();
+                    auto typesNode = std::make_shared<Node>("TypeDeclarations", Current().Line);
+                    while (Current().Type == TokenType::Identifier) {
+                        auto typeName = Advance();
+                        Expect("=", "يجب وضع علامة '=' بعد اسم النوع");
 
-        // ج. تعريف المتغيرات
-        while (Current().Value == "متغير") {
-            try {
-                Advance();
-                auto varsNode = std::make_shared<Node>("VarDeclarations", Current().Line);
-                while (Current().Type == TokenType::Identifier) {
-                    std::vector<Token> varNames;
-                    varNames.push_back(Advance());
-                    while (MatchComma()) {
-                        varNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
-                    }
+                        if (Current().Value == "قائمة" || Current().Value == "مصفوفة") {
+                            Advance();
+                            Expect("[", "يجب فتح قوس مربع '[' لحجم القائمة");
+                            auto sizeToken = ExpectType(TokenType::Number, "يجب تحديد حجم القائمة كرقم");
+                            Expect("]", "يجب إغلاق القوس المربع ']'");
+                            Expect("من", "يجب كتابة كلمة 'من' لتحديد نوع عناصر القائمة");
+                            auto elemType = Advance();
+                            Expect("؛", "يجب إنهاء تعريف النوع بفاصلة منقوطة '؛'");
 
-                    Expect(":", "يجب وضع نقطتين ':' بعد أسماء المتغيرات");
-                    auto typeToken = Advance();
-                    Expect("؛", "يجب إنهاء تعريف المتغير بفاصلة منقوطة '؛'");
+                            auto arrayNode = std::make_shared<Node>("TypeDecl_Array", typeName.Value, elemType.Value, typeName.Line);
+                            arrayNode->Val = sizeToken.Value;
+                            typesNode->AddChild(arrayNode);
+                        } else if (Current().Value == "سجل") {
+                            Advance();
+                            Expect("{", "يجب فتح قوس مجموعة '{' لحقول السجل");
+                            auto recordNode = std::make_shared<Node>("TypeDecl_Record", typeName.Value, typeName.Line);
 
-                    for (const auto& v : varNames) {
-                        varsNode->AddChild(std::make_shared<Node>("VarDecl", v.Value, typeToken.Value, v.Line));
-                    }
-                }
-                declsNode->AddChild(varsNode);
-            } catch (const std::exception& ex) {
-                std::string msg = ex.what();
-                bool exists = false;
-                for (const auto& e : Errors) if (e == msg) { exists = true; break; }
-                if (!exists) Errors.push_back(msg);
-                Synchronize();
-            }
-        }
+                            while (Current().Type == TokenType::Identifier) {
+                                std::vector<std::string> fieldNames;
+                                fieldNames.push_back(Advance().Value);
+                                while (MatchComma()) {
+                                    fieldNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم الحقل").Value);
+                                }
+                                Expect(":", "يجب وضع نقطتين ':' بعد أسماء الحقول");
+                                auto fieldType = Advance().Value;
 
-        // د. تعريف الإجراءات
-        while (Current().Value == "اجراء") {
-            try {
-                Advance();
-                auto procName = ExpectType(TokenType::Identifier, "يجب تحديد اسم الإجراء كمعرف");
-                auto procNode = std::make_shared<Node>("ProcedureDecl", procName.Value, procName.Line);
+                                for (const auto& fName : fieldNames) {
+                                    recordNode->AddChild(std::make_shared<Node>("FieldDecl", fName, fieldType, typeName.Line));
+                                }
 
-                if (Match("(")) {
-                    auto paramsNode = std::make_shared<Node>("Parameters", Current().Line);
-                    while (Current().Type == TokenType::Identifier || Current().Value == "بالقيمة" || Current().Value == "بالمرجع") {
-                        std::string passMode = "بالقيمة";
-                        if (Current().Value == "بالقيمة" || Current().Value == "بالمرجع") {
-                            passMode = Advance().Value;
+                                if (Current().Value == "؛") Advance();
+                            }
+                            Expect("}", "يجب إغلاق قوس المجموعة '}' للسجل");
+                            Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد تعريف السجل");
+                            typesNode->AddChild(recordNode);
                         }
-                        auto pName = ExpectType(TokenType::Identifier, "يجب كتابة اسم المعامل");
-                        Expect(":", "يجب وضع نقطتين ':' لتحديد نوع المعامل");
-                        auto pType = Advance().Value;
-
-                        auto paramNode = std::make_shared<Node>("ParamDecl", pName.Value, pType, pName.Line);
-                        paramNode->Val = passMode;
-                        paramsNode->AddChild(paramNode);
-
-                        if (!Match("؛") && !MatchComma()) break;
                     }
-                    Expect(")", "يجب إغلاق القوس ')' لقائمة المعاملات");
-                    procNode->AddChild(paramsNode);
+                    declsNode->AddChild(typesNode);
+                } catch (const std::exception& ex) {
+                    std::string msg = ex.what();
+                    bool exists = false;
+                    for (const auto& e : Errors) if (e == msg) { exists = true; break; }
+                    if (!exists) Errors.push_back(msg);
+                    Synchronize();
                 }
+            }
+            // ج. تعريف المتغيرات
+            else if (Current().Value == "متغير") {
+                progressed = true;
+                try {
+                    Advance();
+                    auto varsNode = std::make_shared<Node>("VarDeclarations", Current().Line);
+                    while (Current().Type == TokenType::Identifier) {
+                        std::vector<Token> varNames;
+                        varNames.push_back(Advance());
+                        while (MatchComma()) {
+                            varNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
+                        }
 
-                Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد ترويسة الإجراء");
-                procNode->AddChild(ParseBlock());
-                Expect("؛", "يجب إنهاء الإجراء بفاصلة منقوطة '؛'");
-                declsNode->AddChild(procNode);
-            } catch (const std::exception& ex) {
-                std::string msg = ex.what();
-                bool exists = false;
-                for (const auto& e : Errors) if (e == msg) { exists = true; break; }
-                if (!exists) Errors.push_back(msg);
-                Synchronize();
+                        Expect(":", "يجب وضع نقطتين ':' بعد أسماء المتغيرات");
+                        auto typeToken = Advance();
+                        Expect("؛", "يجب إنهاء تعريف المتغير بفاصلة منقوطة '؛'");
+
+                        for (const auto& v : varNames) {
+                            varsNode->AddChild(std::make_shared<Node>("VarDecl", v.Value, typeToken.Value, v.Line));
+                        }
+                    }
+                    declsNode->AddChild(varsNode);
+                } catch (const std::exception& ex) {
+                    std::string msg = ex.what();
+                    bool exists = false;
+                    for (const auto& e : Errors) if (e == msg) { exists = true; break; }
+                    if (!exists) Errors.push_back(msg);
+                    Synchronize();
+                }
+            }
+            // د. تعريف الإجراءات
+            else if (Current().Value == "اجراء" || Current().Value == "إجراء" || Current().Value == "دالة" || Current().Value == "داله") {
+                progressed = true;
+                try {
+                    Advance();
+                    auto procName = ExpectType(TokenType::Identifier, "يجب تحديد اسم الإجراء كمعرف");
+                    auto procNode = std::make_shared<Node>("ProcedureDecl", procName.Value, procName.Line);
+
+                    if (Match("(")) {
+                        auto paramsNode = std::make_shared<Node>("Parameters", Current().Line);
+                        while (Current().Type == TokenType::Identifier || Current().Value == "بالقيمة" || Current().Value == "بالمرجع") {
+                            std::string passMode = "بالقيمة";
+                            if (Current().Value == "بالقيمة" || Current().Value == "بالمرجع") {
+                                passMode = Advance().Value;
+                            }
+                            auto pName = ExpectType(TokenType::Identifier, "يجب كتابة اسم المعامل");
+                            Expect(":", "يجب وضع نقطتين ':' لتحديد نوع المعامل");
+                            auto pType = Advance().Value;
+
+                            auto paramNode = std::make_shared<Node>("ParamDecl", pName.Value, pType, pName.Line);
+                            paramNode->Val = passMode;
+                            paramsNode->AddChild(paramNode);
+
+                            if (!Match("؛") && !MatchComma()) break;
+                        }
+                        Expect(")", "يجب إغلاق القوس ')' لقائمة المعاملات");
+                        procNode->AddChild(paramsNode);
+                    }
+
+                    Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد ترويسة الإجراء");
+                    procNode->AddChild(ParseBlock());
+                    if (Current().Value == "؛") {
+                        Advance();
+                    }
+                    declsNode->AddChild(procNode);
+                } catch (const std::exception& ex) {
+                    std::string msg = ex.what();
+                    bool exists = false;
+                    for (const auto& e : Errors) if (e == msg) { exists = true; break; }
+                    if (!exists) Errors.push_back(msg);
+                    Synchronize();
+                }
             }
         }
 
@@ -314,6 +328,10 @@ namespace CompilerCPP {
         if (Current().Value == "اطبع")   return ParsePrintStatement();
         if (Current().Value == "اقرا" || Current().Value == "اقرأ" || Current().Value == "اقرء")   return ParseReadStatement();
         if (Current().Value == "{")      return ParseBlock();
+
+        if (Current().Value == "استدعاء" || Current().Value == "نداء") {
+            Advance();
+        }
 
         if (Current().Type == TokenType::Identifier) {
             int line = Current().Line;
@@ -358,6 +376,11 @@ namespace CompilerCPP {
                 return callNode;
             }
 
+            // دعم استدعاء الإجراء بدون أقواس: اسم_الاجراء ؛
+            if (Match("؛")) {
+                return std::make_shared<Node>("CallStatement", varToken.Value, line);
+            }
+
             throw std::runtime_error("خطأ نحوي في السطر " + std::to_string(line) + ": تعليمة غير مكتملة بعد المعرف '" + varToken.Value + "'، يجب وضع علامة '=' للإسناد أو '(' للاستدعاء أو إنهاء التعليمة بـ '؛'");
         }
 
@@ -367,9 +390,11 @@ namespace CompilerCPP {
     std::shared_ptr<Node> Parser::ParseIfStatement() {
         int line = Current().Line;
         Advance(); // اذا
-        Expect("(", "يجب فتح قوس '(' لشرط 'اذا'");
+        bool hasParen = Match("(");
         auto cond = ParseExpression();
-        Expect(")", "يجب إغلاق القوس ')' لشرط 'اذا'");
+        if (hasParen) {
+            Expect(")", "يجب إغلاق القوس ')' لشرط 'اذا'");
+        }
         Expect("فان", "يجب وضع كلمة 'فان' بعد شرط 'اذا'");
 
         auto ifNode = std::make_shared<Node>("IfStatement", line);
@@ -420,10 +445,10 @@ namespace CompilerCPP {
         auto whileNode = std::make_shared<Node>("WhileStatement", line);
         whileNode->AddChild(cond);
 
-        if (Current().Value == "{" || Current().Value == "}") {
+        if (Current().Value == "{") {
             Advance();
             whileNode->AddChild(ParseStatementList());
-            if (Current().Value == "}" || Current().Value == "{") Advance();
+            Expect("}", "يجب إغلاق قوس المجموعة '}' لحلقة 'طالما'");
         } else {
             whileNode->AddChild(ParseStatement());
         }
@@ -507,19 +532,42 @@ namespace CompilerCPP {
         return printNode;
     }
 
+    std::shared_ptr<Node> Parser::ParseVariableAccess() {
+        int line = Current().Line;
+        auto varToken = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير");
+        std::shared_ptr<Node> target = std::make_shared<Node>("Variable", varToken.Value, line);
+
+        while (Current().Value == "." || Current().Value == "[") {
+            if (Match(".")) {
+                auto field = ExpectType(TokenType::Identifier, "يجب تحديد اسم الحقل بعد النقطة");
+                auto access = std::make_shared<Node>("FieldAccess", field.Value, line);
+                access->AddChild(target);
+                target = access;
+            } else if (Match("[")) {
+                auto indexExpr = ParseExpression();
+                Expect("]", "يجب إغلاق القوس المربع ']' بعد الفهرس");
+                auto indexed = std::make_shared<Node>("IndexedAccess", line);
+                indexed->AddChild(target);
+                indexed->AddChild(indexExpr);
+                target = indexed;
+            }
+        }
+        return target;
+    }
+
     std::shared_ptr<Node> Parser::ParseReadStatement() {
         int line = Current().Line;
         Advance(); // اقرا / اقرأ / اقرء
         bool hasParen = Match("(");
         
         auto readNode = std::make_shared<Node>("ReadStatement", "", line);
-        auto firstVar = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير المراد القراءة إليه");
-        readNode->Name = firstVar.Value;
-        readNode->AddChild(std::make_shared<Node>("Identifier", firstVar.Value, line));
+        auto firstVar = ParseVariableAccess();
+        readNode->Name = firstVar->Name;
+        readNode->AddChild(firstVar);
 
         while (MatchComma()) {
-            auto nextVar = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير بعد الفاصلة في تعليمة 'اقرا'");
-            readNode->AddChild(std::make_shared<Node>("Identifier", nextVar.Value, line));
+            auto nextVar = ParseVariableAccess();
+            readNode->AddChild(nextVar);
         }
 
         if (hasParen) {
@@ -561,8 +609,9 @@ namespace CompilerCPP {
 
     std::shared_ptr<Node> Parser::ParseEquality() {
         auto node = ParseRelational();
-        while (Current().Value == "==" || Current().Value == "!=") {
+        while (Current().Value == "==" || Current().Value == "!=" || Current().Value == "=") {
             std::string op = Advance().Value;
+            if (op == "=") op = "==";
             auto bin = std::make_shared<Node>("BinaryExpr", op, node->Line);
             bin->AddChild(node);
             bin->AddChild(ParseRelational());
@@ -622,8 +671,9 @@ namespace CompilerCPP {
     std::shared_ptr<Node> Parser::ParseFactor() {
         int line = Current().Line;
 
-        if (Match("!")) {
-            auto uNode = std::make_shared<Node>("UnaryExpr", "!", line);
+        if (Current().Value == "!" || Current().Value == "-" || Current().Value == "+") {
+            std::string uOp = Advance().Value;
+            auto uNode = std::make_shared<Node>("UnaryExpr", uOp, line);
             uNode->AddChild(ParseFactor());
             return uNode;
         }

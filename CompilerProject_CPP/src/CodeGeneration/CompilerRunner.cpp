@@ -9,7 +9,7 @@
 
 namespace CompilerCPP {
 
-    CompilationResult CompilerRunner::Compile(const std::string& sourceCode, bool isVerbose, const std::string& userInput) {
+    CompilationResult CompilerRunner::Compile(const std::string& sourceCode, bool isVerbose, const std::string& userInput, bool runInterpreter) {
         CompilationResult result;
         result.SourceCode = sourceCode;
 
@@ -98,16 +98,20 @@ namespace CompilerCPP {
             result.AssemblyCode = asmGen.GenerateX86Assembly();
             result.CILCode = asmGen.GenerateCIL();
 
-            TACInterpreter interpreter(result.TAC, userInput);
-            result.ExecutionOutput = interpreter.Execute();
+            if (runInterpreter) {
+                TACInterpreter interpreter(result.TAC, userInput);
+                result.ExecutionOutput = interpreter.Execute();
 
-            if (isVerbose) {
-                std::cout << "═══════════════════════════════════════════════════════════\n";
-                std::cout << "🖥️  مخرجات تشغيل البرنامج (Execution Output):\n";
-                std::cout << "═══════════════════════════════════════════════════════════\n";
-                std::cout << result.ExecutionOutput;
-                std::cout << "═══════════════════════════════════════════════════════════\n";
-                std::cout << "\n🎉 اكتملت جميع مراحل الترجمة والتشغيل في C++ بنجاح تام!\n";
+                if (isVerbose) {
+                    std::cout << "═══════════════════════════════════════════════════════════\n";
+                    std::cout << "🖥️  مخرجات تشغيل البرنامج (Execution Output):\n";
+                    std::cout << "═══════════════════════════════════════════════════════════\n";
+                    std::cout << result.ExecutionOutput;
+                    std::cout << "═══════════════════════════════════════════════════════════\n";
+                    std::cout << "\n🎉 اكتملت جميع مراحل الترجمة والتشغيل في C++ بنجاح تام!\n";
+                }
+            } else if (isVerbose) {
+                std::cout << "\n🎉 اكتملت جميع مراحل الترجمة في C++ بنجاح تام!\n";
             }
 
             result.IsSuccess = true;

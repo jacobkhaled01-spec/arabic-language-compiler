@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
         HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
         DWORD fileType = GetFileType(hStdin);
-        bool hasPipedInput = (fileType == FILE_TYPE_PIPE || fileType == FILE_TYPE_DISK);
+        bool hasPipedInput = isRunMode && (fileType == FILE_TYPE_PIPE || fileType == FILE_TYPE_DISK);
         if (hasPipedInput) {
             if (fileType == FILE_TYPE_DISK) {
                 char buffer[2048];
@@ -140,8 +140,17 @@ int main(int argc, char* argv[]) {
         }
 #endif
 
+        if (userInput.empty()) {
+            for (size_t i = 2; i < args.size(); ++i) {
+                if (args[i] != "--json" && args[i] != "-j" && args[i] != "--run" && args[i] != "-r") {
+                    if (!userInput.empty()) userInput += " ";
+                    userInput += args[i];
+                }
+            }
+        }
+
         if (isRunMode) {
-            auto result = CompilerCPP::CompilerRunner::Compile(sourceCode, false, "");
+            auto result = CompilerCPP::CompilerRunner::Compile(sourceCode, false, "", false);
             ConsolePrint("Microsoft Windows [Version 10.0]\n(c) Microsoft Corporation. All rights reserved.\n\n");
             ConsolePrint("> CompilerProject_CPP.exe \"" + inputFilePath.filename().string() + "\"\n");
             ConsolePrint("--------------------------------------------------------------------------------\n");
@@ -171,7 +180,7 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
-        auto result = CompilerCPP::CompilerRunner::Compile(sourceCode, !jsonMode, userInput);
+        auto result = CompilerCPP::CompilerRunner::Compile(sourceCode, !jsonMode, userInput, !jsonMode);
 
         if (jsonMode) {
             std::cout << result.ToJson() << "\n";

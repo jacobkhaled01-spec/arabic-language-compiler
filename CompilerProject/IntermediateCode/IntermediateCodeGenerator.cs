@@ -16,6 +16,7 @@ namespace CompilerProject.IntermediateCode
         private int _tempCounter = 1;
         private int _labelCounter = 1;
         private readonly List<string> _instructions = new List<string>();
+        private readonly Dictionary<string, long> _arrayTypeSizes = new Dictionary<string, long>();
 
         public IReadOnlyList<string> Instructions => _instructions;
 
@@ -28,6 +29,7 @@ namespace CompilerProject.IntermediateCode
         public List<string> Generate(Node rootNode)
         {
             _instructions.Clear();
+            _arrayTypeSizes.Clear();
             _tempCounter = 1;
             _labelCounter = 1;
 
@@ -74,12 +76,27 @@ namespace CompilerProject.IntermediateCode
                 case "ProgramRoot":
                 case "Block":
                 case "Declarations":
+                case "TypeDeclarations":
                 case "ConstDeclarations":
                 case "VarDeclarations":
                 case "StatementList":
                     foreach (var child in node.Children)
                     {
                         GenerateNode(child);
+                    }
+                    break;
+
+                case "TypeDecl_Array":
+                    if (long.TryParse(node.Val, out long arrSize))
+                    {
+                        _arrayTypeSizes[node.Name] = arrSize;
+                    }
+                    break;
+
+                case "VarDecl":
+                    if (_arrayTypeSizes.TryGetValue(node.DataType, out long varSz))
+                    {
+                        _instructions.Add($"alloc_array {node.Name} {varSz}");
                     }
                     break;
 
@@ -128,7 +145,18 @@ namespace CompilerProject.IntermediateCode
                         {
                             foreach (var p in child.Children)
                             {
-                                _instructions.Add($"{p.Name} = pop_param");
+                                if (p.Val == "بالمرجع")
+                                {
+                                    _instructions.Add($"{p.Name} = pop_param_ref");
+                                }
+                                else
+                                {
+                                    _instructions.Add($"{p.Name} = pop_param");
+                                }
+                                if (_arrayTypeSizes.TryGetValue(p.DataType, out long paramSz))
+                                {
+                                    _instructions.Add($"alloc_array {p.Name} {paramSz}");
+                                }
                             }
                         }
                         else if (child.Value == "Block")

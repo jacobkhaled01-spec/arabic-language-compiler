@@ -74,7 +74,7 @@ namespace CompilerProject.CodeGeneration
 
             foreach (var line in _tacInstructions)
             {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//")) continue;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//") || line.StartsWith("alloc_array ")) continue;
 
                 // 1. Labels (L1:)
                 if (line.EndsWith(":"))
@@ -233,7 +233,7 @@ namespace CompilerProject.CodeGeneration
 
             foreach (var line in _tacInstructions)
             {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//")) continue;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//") || line.StartsWith("alloc_array ")) continue;
 
                 // Labels
                 if (line.EndsWith(":"))

@@ -17,9 +17,11 @@ namespace CompilerCPP {
         std::stack<size_t> _callStack;
         std::deque<std::string> _paramQueue;
         std::unordered_map<std::string, std::string> _aliases;
+        std::stack<std::unordered_map<std::string, std::string>> _aliasStack;
         std::vector<std::string> _inputTokens;
         size_t _inputIndex = 0;
         bool _isInteractive = false;
+        std::unordered_map<std::string, long long> _arrayBounds;
 
         double EvaluateExpr(const std::string& expr);
         std::string ResolveArrayName(const std::string& name);

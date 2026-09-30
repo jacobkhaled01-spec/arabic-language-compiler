@@ -5,11 +5,12 @@
 namespace CompilerCPP {
 
     const std::unordered_set<std::string> Lexer::Keywords = {
-        "برنامج", "ثابت", "نوع", "متغير", "اجراء", "دالة",
+        "برنامج", "ثابت", "نوع", "متغير", "اجراء", "إجراء", "دالة", "داله",
         "صحيح", "حقيقي", "منطقي", "حرفي", "خيط_رمزي",
         "قائمة", "سجل", "من",
-        "اذا", "فان", "والا", "طالما", "استمر", "اعد", "حتى", "كرر", "الى", "اضف",
-        "اقرا", "اقرأ", "اقرء", "اطبع", "صواب", "خطأ", "صح", "خطا", "بالقيمة", "بالمرجع", "ارجع"
+        "اذا", "إذا", "فان", "فأن", "فإن", "فافعل", "والا", "طالما", "استمر", "اعد", "أعد", "حتى", "كرر", "الى", "إلى", "اضف", "أضف",
+        "اقرا", "اقرأ", "اقرء", "اطبع", "أطبع", "صواب", "خطأ", "صح", "خطا", "بالقيمة", "بالمرجع", "ارجع",
+        "ابدأ", "ابدا", "النهاية", "استدعاء", "نداء"
     };
 
     Lexer::Lexer(std::string sourceCode)
@@ -80,6 +81,15 @@ namespace CompilerCPP {
 
             // Arabic UTF-8 2-byte sequences (0xD8-0xDF)
             if (IsArabicLetterStart(c) && _pos + 1 < _src.size()) {
+                unsigned char b2 = static_cast<unsigned char>(_src[_pos + 1]);
+                // Stop at Arabic punctuation: ؛ (0xD8 0x9B), ، (0xD8 0x8C), ؟ (0xD8 0x9F)
+                if (c == 0xD8 && (b2 == 0x9B || b2 == 0x8C || b2 == 0x9F)) {
+                    break;
+                }
+                // Stop at Arabic percent ٪ (0xD9 0xAA), decimal ٫ (0xD9 0xAB), thousands ٬ (0xD9 0xAC)
+                if (c == 0xD9 && (b2 >= 0xAA && b2 <= 0xAC)) {
+                    break;
+                }
                 Advance(2);
             }
             // English letters, digits, underscore
@@ -91,8 +101,19 @@ namespace CompilerCPP {
         }
 
         std::string val = _src.substr(startPos, _pos - startPos);
-        TokenType type = (Keywords.find(val) != Keywords.end()) ? TokenType::Keyword : TokenType::Identifier;
-        return Token(val, type, startLine);
+        std::string normVal = val;
+        if (normVal == "إذا") normVal = "اذا";
+        else if (normVal == "إلى") normVal = "الى";
+        else if (normVal == "أضف") normVal = "اضف";
+        else if (normVal == "أعد") normVal = "اعد";
+        else if (normVal == "أطبع") normVal = "اطبع";
+        else if (normVal == "إجراء" || normVal == "داله") normVal = "اجراء";
+        else if (normVal == "فأن" || normVal == "فإن" || normVal == "فافعل") normVal = "فان";
+        else if (normVal == "اقرأ" || normVal == "اقرء") normVal = "اقرا";
+        else if (normVal == "نداء") normVal = "استدعاء";
+
+        TokenType type = (Keywords.find(normVal) != Keywords.end() || Keywords.find(val) != Keywords.end()) ? TokenType::Keyword : TokenType::Identifier;
+        return Token((type == TokenType::Keyword) ? normVal : val, type, startLine);
     }
 
     Token Lexer::ReadString(char quoteChar) {
@@ -209,16 +230,21 @@ namespace CompilerCPP {
             else if (c == '\'') {
                 tokens.push_back(ReadChar());
             }
-            // 6. الفاصلة المنقوطة العربية ؛ (D8 BB) أو الإنجليزية ;
-            else if (_pos + 1 < _src.size() && static_cast<unsigned char>(_src[_pos]) == 0xD8 && static_cast<unsigned char>(_src[_pos + 1]) == 0xBB) {
-                tokens.emplace_back("؛", TokenType::Identifier, _line); // terminal semicolon
+            // 6. الفاصلة المنقوطة العربية ؛ (D8 9B) أو الإنجليزية ;
+            else if ((_pos + 1 < _src.size() && static_cast<unsigned char>(_src[_pos]) == 0xD8 && static_cast<unsigned char>(_src[_pos + 1]) == 0x9B) || c == ';') {
+                tokens.emplace_back("؛", TokenType::Symbol, _line); // terminal semicolon
+                if (c == ';') Advance(1); else Advance(2);
+            }
+            // 6.ب الفاصلة العربية ، (D8 8C) أو الإنجليزية ,
+            else if (_pos + 1 < _src.size() && static_cast<unsigned char>(_src[_pos]) == 0xD8 && static_cast<unsigned char>(_src[_pos + 1]) == 0x8C) {
+                tokens.emplace_back("،", TokenType::Symbol, _line);
                 Advance(2);
-            } else if (c == ';') {
-                tokens.emplace_back("؛", TokenType::Identifier, _line);
+            } else if (c == ',') {
+                tokens.emplace_back("،", TokenType::Symbol, _line);
                 Advance();
             }
             // 7. الرموز البسيطة
-            else if (c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']' || c == ':' || c == ',' || c == '.') {
+            else if (c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']' || c == ':' || c == '.') {
                 tokens.emplace_back(std::string(1, c), TokenType::Symbol, _line);
                 Advance();
             }

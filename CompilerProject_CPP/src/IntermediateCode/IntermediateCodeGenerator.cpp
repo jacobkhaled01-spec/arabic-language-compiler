@@ -13,10 +13,18 @@ namespace CompilerCPP {
         return "L" + std::to_string(++_labelCounter);
     }
 
+    std::string IntermediateCodeGenerator::ScopeName(const std::string& varName) {
+        if (!_currentProc.empty() && _localVars.find(varName) != _localVars.end()) {
+            return _currentProc + "_" + varName;
+        }
+        return varName;
+    }
+
     std::vector<std::string> IntermediateCodeGenerator::Generate(const std::shared_ptr<Node>& root) {
         _tac.clear();
         _tempCounter = 0;
         _labelCounter = 0;
+        _arrayTypeSizes.clear();
 
         if (!root) return _tac;
 
@@ -60,30 +68,80 @@ namespace CompilerCPP {
         if (!node) return;
 
         for (const auto& sec : node->Children) {
-            if (sec->Value == "ConstDeclarations") {
+            if (sec->Value == "TypeDeclarations") {
+                for (const auto& c : sec->Children) {
+                    if (c->Value == "TypeDecl_Array") {
+                        try {
+                            _arrayTypeSizes[c->Name] = std::stoll(c->Val);
+                        } catch (...) {}
+                    }
+                }
+            } else if (sec->Value == "VarDeclarations") {
+                for (const auto& v : sec->Children) {
+                    if (_arrayTypeSizes.find(v->DataType) != _arrayTypeSizes.end()) {
+                        _tac.push_back("alloc_array " + ScopeName(v->Name) + " " + std::to_string(_arrayTypeSizes[v->DataType]));
+                    }
+                }
+            } else if (sec->Value == "ConstDeclarations") {
                 for (const auto& c : sec->Children) {
                     _tac.push_back(c->Name + " = " + c->Val);
                 }
             } else if (sec->Value == "ProcedureDecl") {
                 std::string procName = sec->Name;
+                _currentProc = procName;
+                _localVars.clear();
+
                 _tac.push_back("proc_" + procName + ":");
                 std::shared_ptr<Node> blockNode = nullptr;
                 for (const auto& child : sec->Children) {
                     if (child->Value == "Parameters") {
                         for (const auto& p : child->Children) {
-                            _tac.push_back(p->Name + " = pop_param");
+                            _localVars.insert(p->Name);
+                            if (p->Val == "بالمرجع") {
+                                _tac.push_back(ScopeName(p->Name) + " = pop_param_ref");
+                            } else {
+                                _tac.push_back(ScopeName(p->Name) + " = pop_param");
+                            }
+                            if (_arrayTypeSizes.find(p->DataType) != _arrayTypeSizes.end()) {
+                                _tac.push_back("alloc_array " + ScopeName(p->Name) + " " + std::to_string(_arrayTypeSizes[p->DataType]));
+                            }
                         }
                     } else if (child->Value == "Block") {
                         blockNode = child;
                     }
                 }
-                if (blockNode && blockNode->Children.size() > 1) {
-                    auto stmtList = blockNode->Children[1];
-                    for (const auto& s : stmtList->Children) {
-                        GenerateStatement(s);
+                if (blockNode) {
+                    if (!blockNode->Children.empty() && blockNode->Children[0]->Value == "Declarations") {
+                        auto decls = blockNode->Children[0];
+                        for (const auto& d : decls->Children) {
+                            if (d->Value == "TypeDeclarations") {
+                                for (const auto& c : d->Children) {
+                                    if (c->Value == "TypeDecl_Array") {
+                                        try {
+                                            _arrayTypeSizes[c->Name] = std::stoll(c->Val);
+                                        } catch (...) {}
+                                    }
+                                }
+                            } else if (d->Value == "VarDeclarations") {
+                                for (const auto& v : d->Children) {
+                                    _localVars.insert(v->Name);
+                                    if (_arrayTypeSizes.find(v->DataType) != _arrayTypeSizes.end()) {
+                                        _tac.push_back("alloc_array " + ScopeName(v->Name) + " " + std::to_string(_arrayTypeSizes[v->DataType]));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (blockNode->Children.size() > 1) {
+                        auto stmtList = blockNode->Children[1];
+                        for (const auto& s : stmtList->Children) {
+                            GenerateStatement(s);
+                        }
                     }
                 }
                 _tac.push_back("return");
+                _currentProc = "";
+                _localVars.clear();
             }
         }
     }
@@ -93,12 +151,12 @@ namespace CompilerCPP {
 
         if (node->Value == "Assign") {
             std::string exprRes = GenerateExpression(node->Children[1]);
-            std::string target = node->Name;
+            std::string target = ScopeName(node->Name);
             if (node->Children[0]->Value == "FieldAccess") {
-                target = node->Children[0]->Children[0]->Name + "." + node->Children[0]->Name;
+                target = ScopeName(node->Children[0]->Children[0]->Name) + "." + node->Children[0]->Name;
             } else if (node->Children[0]->Value == "IndexedAccess") {
                 std::string idx = GenerateExpression(node->Children[0]->Children[1]);
-                target = node->Children[0]->Children[0]->Name + "[" + idx + "]";
+                target = ScopeName(node->Children[0]->Children[0]->Name) + "[" + idx + "]";
             }
             _tac.push_back(target + " = " + exprRes);
         } else if (node->Value == "PrintStatement") {
@@ -106,20 +164,18 @@ namespace CompilerCPP {
                 const auto& arg = node->Children[i];
                 bool isLast = (i + 1 == node->Children.size());
                 std::string cmd = isLast ? "print " : "print_raw ";
-                if (arg->Value == "StringLiteral") {
-                    _tac.push_back(cmd + "\"" + arg->Val + "\"");
-                } else {
-                    std::string res = GenerateExpression(arg);
-                    _tac.push_back(cmd + res);
-                }
+                std::string res = GenerateExpression(arg);
+                _tac.push_back(cmd + res);
             }
         } else if (node->Value == "ReadStatement") {
             if (!node->Children.empty()) {
                 for (const auto& child : node->Children) {
-                    _tac.push_back("read " + child->Name);
+                    std::string target = GenerateExpression(child);
+                    if (target.empty()) target = ScopeName(child->Name);
+                    _tac.push_back("read " + target);
                 }
             } else if (!node->Name.empty()) {
-                _tac.push_back("read " + node->Name);
+                _tac.push_back("read " + ScopeName(node->Name));
             }
         } else if (node->Value == "IfStatement") {
             std::string cond = GenerateExpression(node->Children[0]);
@@ -189,7 +245,7 @@ namespace CompilerCPP {
             _tac.push_back("goto " + startLabel);
             _tac.push_back(exitLabel + ":");
         } else if (node->Value == "ForStatement") {
-            std::string loopVar = node->Name;
+            std::string loopVar = ScopeName(node->Name);
             std::string startVal = GenerateExpression(node->Children[0]);
             std::string endVal = GenerateExpression(node->Children[1]);
             std::string stepVal = (node->Children.size() > 3) ? GenerateExpression(node->Children[2]) : "1";
@@ -230,21 +286,29 @@ namespace CompilerCPP {
     std::string IntermediateCodeGenerator::GenerateExpression(const std::shared_ptr<Node>& node) {
         if (!node) return "";
 
-        if (node->Value == "Number" || node->Value == "StringLiteral" || node->Value == "BooleanLiteral" || node->Value == "CharLiteral") {
+        if (node->Value == "Number" || node->Value == "BooleanLiteral") {
             return node->Val;
         }
 
+        if (node->Value == "StringLiteral") {
+            return "\"" + node->Val + "\"";
+        }
+
+        if (node->Value == "CharLiteral") {
+            return "'" + node->Val + "'";
+        }
+
         if (node->Value == "Variable") {
-            return node->Name;
+            return ScopeName(node->Name);
         }
 
         if (node->Value == "FieldAccess") {
-            return node->Children[0]->Name + "." + node->Name;
+            return ScopeName(node->Children[0]->Name) + "." + node->Name;
         }
 
         if (node->Value == "IndexedAccess") {
             std::string idx = GenerateExpression(node->Children[1]);
-            return node->Children[0]->Name + "[" + idx + "]";
+            return ScopeName(node->Children[0]->Name) + "[" + idx + "]";
         }
 
         if (node->Value == "UnaryExpr") {

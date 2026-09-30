@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
 using System.Linq;
+using System.Threading.Tasks;
 using CompilerProject.CodeGeneration;
 using CompilerProject.Models;
 
@@ -75,7 +76,7 @@ namespace LanguageEditor
         {
             _liveAnalysisTimer = new System.Windows.Forms.Timer
             {
-                Interval = 350 // تأخير 350 ميلي ثانية بعد توقف الكتابة
+                Interval = 400 // تأخير 400 ميلي ثانية بعد توقف الكتابة
             };
             _liveAnalysisTimer.Tick += (s, e) =>
             {
@@ -238,6 +239,18 @@ namespace LanguageEditor
                 _fileStatusLabel.Text = "تم التعديل *";
                 _lineNumbersPanel.Invalidate();
                 TriggerLiveAnalysis(); // تشغيل المؤقت للتحليل اللحظي المباشر
+            };
+            _codeEditor.KeyDown += (s, e) =>
+            {
+                if (e.Control && e.KeyCode == Keys.V)
+                {
+                    e.SuppressKeyPress = true;
+                    if (Clipboard.ContainsText())
+                    {
+                        string text = Clipboard.GetText(TextDataFormat.UnicodeText);
+                        _codeEditor.SelectedText = text;
+                    }
+                }
             };
             _codeEditor.SelectionChanged += (s, e) => UpdateCaretPosition();
 
@@ -692,30 +705,39 @@ namespace LanguageEditor
 
         private void LineNumbersPanel_Paint(object? sender, PaintEventArgs e)
         {
-            int firstIndex = _codeEditor.GetCharIndexFromPosition(new Point(0, 0));
-            int firstLine = _codeEditor.GetLineFromCharIndex(firstIndex);
-
-            int lastIndex = _codeEditor.GetCharIndexFromPosition(new Point(0, _codeEditor.Height));
-            int lastLine = _codeEditor.GetLineFromCharIndex(lastIndex);
-
-            using var brush = new SolidBrush(Color.FromArgb(150, 150, 150));
-            using var font = new Font("Consolas", 10F, FontStyle.Bold);
-            using var borderPen = new Pen(Color.FromArgb(65, 65, 65), 1);
-
-            // خط فاصل عمودي على يسار لوحة الأرقام ليفصلها عن محرر الأكواد
-            e.Graphics.DrawLine(borderPen, 0, 0, 0, _lineNumbersPanel.Height);
-
-            for (int i = firstLine; i <= lastLine + 1; i++)
+            if (_codeEditor.Lines.Length == 0) return;
+            try
             {
-                int charIndex = _codeEditor.GetFirstCharIndexFromLine(i);
-                if (charIndex < 0 && i > 0) break;
+                int firstIndex = _codeEditor.GetCharIndexFromPosition(new Point(0, 0));
+                int firstLine = _codeEditor.GetLineFromCharIndex(firstIndex);
 
-                Point pos = _codeEditor.GetPositionFromCharIndex(charIndex >= 0 ? charIndex : 0);
-                string numStr = (i + 1).ToString();
-                var size = e.Graphics.MeasureString(numStr, font);
-                float x = _lineNumbersPanel.Width - size.Width - 8;
-                e.Graphics.DrawString(numStr, font, brush, x, pos.Y + 2);
+                int lastIndex = _codeEditor.GetCharIndexFromPosition(new Point(0, _codeEditor.Height));
+                int lastLine = _codeEditor.GetLineFromCharIndex(lastIndex);
+
+                if (firstLine < 0) firstLine = 0;
+                if (lastLine >= _codeEditor.Lines.Length) lastLine = _codeEditor.Lines.Length - 1;
+                if (lastLine < firstLine) lastLine = firstLine;
+
+                using var brush = new SolidBrush(Color.FromArgb(150, 150, 150));
+                using var font = new Font("Consolas", 10F, FontStyle.Bold);
+                using var borderPen = new Pen(Color.FromArgb(65, 65, 65), 1);
+
+                // خط فاصل عمودي على يسار لوحة الأرقام ليفصلها عن محرر الأكواد
+                e.Graphics.DrawLine(borderPen, 0, 0, 0, _lineNumbersPanel.Height);
+
+                for (int i = firstLine; i <= lastLine; i++)
+                {
+                    int charIndex = _codeEditor.GetFirstCharIndexFromLine(i);
+                    if (charIndex < 0) break;
+
+                    Point pos = _codeEditor.GetPositionFromCharIndex(charIndex);
+                    string numStr = (i + 1).ToString();
+                    var size = e.Graphics.MeasureString(numStr, font);
+                    float x = _lineNumbersPanel.Width - size.Width - 8;
+                    e.Graphics.DrawString(numStr, font, brush, x, pos.Y + 2);
+                }
             }
+            catch { }
         }
 
         private void UpdateLineNumbers()
@@ -759,9 +781,9 @@ namespace LanguageEditor
         }
 
         /// <summary>
-        /// التحليل اللحظي المباشر الذي يعمل فور كتابة أو تعديل الكود
+        /// التحليل اللحظي المباشر الذي يعمل في خيط خلفي فور كتابة أو لصق الكود بدون أي تجميد للواجهة
         /// </summary>
-        private void RunLiveAnalysis()
+        private async void RunLiveAnalysis()
         {
             string code = _codeEditor.Text;
             if (string.IsNullOrWhiteSpace(code))
@@ -773,46 +795,11 @@ namespace LanguageEditor
 
             try
             {
-                CompilationResult? result = null;
-                string compilerExe = FindCompilerExe();
-                if (!string.IsNullOrEmpty(compilerExe) && File.Exists(compilerExe))
-                {
-                    string tempSourceFile = Path.Combine(Path.GetTempPath(), $"live_{Guid.NewGuid():N}.arb");
-                    try
-                    {
-                        File.WriteAllText(tempSourceFile, code, new UTF8Encoding(false));
-                        var psi = new ProcessStartInfo
-                        {
-                            FileName = compilerExe,
-                            Arguments = $"\"{tempSourceFile}\" --json",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            StandardOutputEncoding = Encoding.UTF8
-                        };
-                        using var proc = Process.Start(psi);
-                        if (proc != null)
-                        {
-                            string json = proc.StandardOutput.ReadToEnd();
-                            proc.WaitForExit(3000);
-                            if (!string.IsNullOrWhiteSpace(json) && json.Contains("IsSuccess"))
-                            {
-                                result = JsonSerializer.Deserialize<CompilationResult>(json);
-                            }
-                        }
-                    }
-                    catch { }
-                    finally
-                    {
-                        try { if (File.Exists(tempSourceFile)) File.Delete(tempSourceFile); } catch { }
-                    }
-                }
+                // تنفيذ التحليل بالكامل مباشرة في الذاكرة عبر خيط خلفي فائق السرعة بدون تشغيل المفسر وبدون حجب الواجهة
+                var result = await Task.Run(() => CompilerRunner.Compile(code, isVerbose: false, runInterpreter: false));
 
-                if (result == null)
-                {
-                    result = CompilerRunner.Compile(code, isVerbose: false);
-                }
+                // إذا تغير نص المحرر أثناء التحليل، يتم تجاهل النتيجة تفادياً للتحديثات المتأخرة
+                if (_codeEditor.Text != code) return;
 
                 DisplayCompilationResult(result, isExecutionRun: false);
             }
@@ -981,59 +968,12 @@ namespace LanguageEditor
         {
             _statusLabel.Text = "جاري الترجمة والتحقق من سلامة الكود...";
 
-            string tempSourceFile = Path.Combine(Path.GetTempPath(), $"source_{Guid.NewGuid():N}.arb");
-            File.WriteAllText(tempSourceFile, _codeEditor.Text, new UTF8Encoding(false));
-
-            string compilerExe = FindCompilerExe();
-            CompilationResult? result = null;
-
-            // 1. محاولة استدعاء المترجم الخارجي للحصول على شجرة الإعراب والرموز بصيغة JSON
-            if (!string.IsNullOrEmpty(compilerExe) && File.Exists(compilerExe))
-            {
-                try
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = compilerExe,
-                        Arguments = $"\"{tempSourceFile}\" --json",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    };
-
-                    using var process = Process.Start(psi);
-                    if (process != null)
-                    {
-                        string jsonOutput = process.StandardOutput.ReadToEnd();
-                        process.WaitForExit(5000);
-
-                        if (!string.IsNullOrWhiteSpace(jsonOutput) && jsonOutput.Contains("IsSuccess"))
-                        {
-                            result = JsonSerializer.Deserialize<CompilationResult>(jsonOutput);
-                        }
-                    }
-                }
-                catch
-                {
-                    // Fallback to internal engine if process call encountered an OS issue
-                }
-                finally
-                {
-                    try { if (File.Exists(tempSourceFile)) File.Delete(tempSourceFile); } catch { }
-                }
-            }
-
-            // 2. استخدام المترجم المدمج مباشرة لضمان أعلى دقة وتزامن لحظي
-            if (result == null)
-            {
-                result = CompilerRunner.Compile(_codeEditor.Text, isVerbose: false);
-            }
+            // استخدام المترجم المدمج مباشرة لضمان أقصى سرعة واستجابة فورية بدون أي تجميد
+            CompilationResult result = CompilerRunner.Compile(_codeEditor.Text, isVerbose: false, runInterpreter: false);
 
             DisplayCompilationResult(result, isExecutionRun: true);
 
-            // 3. تشغيل البرنامج في نافذة كونسول مستقلة (Visual Studio Console)
+            // تشغيل البرنامج في نافذة كونسول مستقلة (Visual Studio Console)
             if (result.IsSuccess || (result.SyntaxErrors.Count == 0 && result.TAC.Count > 0))
             {
                 var consoleForm = new VsConsoleForm(result.TAC, _currentFilePath ?? "arabic_program.arb");
@@ -1044,131 +984,145 @@ namespace LanguageEditor
         private void DisplayCompilationResult(CompilationResult result, bool isExecutionRun)
         {
             _lastResult = result;
-            ClearOutputs();
 
-            // 1. عرض الرموز المعجمية (Tokens)
-            int tokenIdx = 1;
-            foreach (var t in result.Tokens)
+            _tokensGrid.SuspendLayout();
+            _symbolTableGrid.SuspendLayout();
+            _errorsGrid.SuspendLayout();
+            _cstTreeView.BeginUpdate();
+            _astTreeView.BeginUpdate();
+
+            try
             {
-                _tokensGrid.Rows.Add(tokenIdx++, t.Value, t.Type, t.Line);
-            }
+                ClearOutputs();
 
-            // 2. عرض شجرة الإعراب (Parse Tree) والشجرة المجردة (AST)
-            if (result.AST != null)
-            {
-                // أ. شجرة الإعراب النحوية (Parse Tree / CST)
-                _cstTreeView.Nodes.Clear();
-                var cstRootNode = BuildParseTreeFromDto(result.AST, result.Tokens);
-                _cstTreeView.Nodes.Add(cstRootNode);
-                _cstTreeView.ExpandAll();
-
-                // ب. الشجرة المجردة الدلالية (AST)
-                _astTreeView.Nodes.Clear();
-                var astRootNode = BuildTreeNodeFromDto(result.AST);
-                _astTreeView.Nodes.Add(astRootNode);
-                _astTreeView.ExpandAll();
-            }
-
-            // 3. عرض جدول الرموز (Symbol Table)
-            foreach (var s in result.SymbolTable)
-            {
-                _symbolTableGrid.Rows.Add(s.Name, s.DataType, s.Kind, s.Value, s.DeclaredLine, s.ReferencedLines);
-            }
-
-            // 4. عرض الكود الوسيط (TAC)
-            var tacSb = new StringBuilder();
-            foreach (var line in result.TAC)
-            {
-                tacSb.AppendLine(line);
-            }
-            _tacTextBox.Text = tacSb.ToString();
-
-            // 5. عرض لغة التجميع (x86 Assembly)
-            _asmTextBox.Text = result.AssemblyCode;
-
-            // 6. عرض .NET CIL
-            _cilTextBox.Text = result.CILCode;
-
-            // 7. عرض الأخطاء (Errors)
-            bool hasErrors = false;
-            var consoleSb = new StringBuilder();
-            int errorNumber = 1;
-
-            if (result.SyntaxErrors.Count > 0)
-            {
-                hasErrors = true;
-                foreach (var err in result.SyntaxErrors)
+                // 1. عرض الرموز المعجمية (Tokens)
+                int tokenIdx = 1;
+                foreach (var t in result.Tokens)
                 {
-                    int line = ExtractLineNumber(err);
-                    _errorsGrid.Rows.Add(errorNumber++, line > 0 ? line.ToString() : "-", "خطأ نحوي (Syntax)", err);
-                    consoleSb.AppendLine($"⚠️ [خطأ نحوي]: {err}");
+                    _tokensGrid.Rows.Add(tokenIdx++, t.Value, t.Type, t.Line);
                 }
-            }
 
-            if (result.SemanticErrors.Count > 0)
-            {
-                hasErrors = true;
-                foreach (var err in result.SemanticErrors)
+                // 2. عرض شجرة الإعراب (Parse Tree) والشجرة المجردة (AST)
+                if (result.AST != null)
                 {
-                    int line = ExtractLineNumber(err);
-                    _errorsGrid.Rows.Add(errorNumber++, line > 0 ? line.ToString() : "-", "خطأ دلالي (Semantic)", err);
-                    consoleSb.AppendLine($"⚠️ [خطأ دلالي]: {err}");
+                    // أ. شجرة الإعراب النحوية (Parse Tree / CST)
+                    _cstTreeView.Nodes.Clear();
+                    var cstRootNode = BuildParseTreeFromDto(result.AST, result.Tokens);
+                    _cstTreeView.Nodes.Add(cstRootNode);
+                    cstRootNode.Expand(); // توسيع المستوى الأول فقط لسرعة فائقة واستجابة فورية
+
+                    // ب. الشجرة المجردة الدلالية (AST)
+                    _astTreeView.Nodes.Clear();
+                    var astRootNode = BuildTreeNodeFromDto(result.AST);
+                    _astTreeView.Nodes.Add(astRootNode);
+                    astRootNode.Expand(); // توسيع المستوى الأول فقط
                 }
-            }
 
-            int totalErrors = result.SyntaxErrors.Count + result.SemanticErrors.Count;
-            _tabErrors.Text = hasErrors ? $"⚠️ قائمة الأخطاء ({totalErrors})" : "⚠️ قائمة الأخطاء";
-
-            // 8. التعامل مع شاشة التشغيل (Visual Studio Command Prompt Theme)
-            string sourceDisplayName = string.IsNullOrEmpty(_currentFilePath) ? "source.arb" : Path.GetFileName(_currentFilePath);
-
-            if (hasErrors)
-            {
-                var errorBanner = new StringBuilder();
-                errorBanner.AppendLine("========== بدء البناء: فحص واكتشاف الأخطاء ==========");
-                errorBanner.AppendLine($"❌ فشلت الترجمة: تم اكتشاف ({totalErrors}) خطأ في الكود المصدري.");
-                errorBanner.AppendLine();
-                errorBanner.Append(consoleSb);
-                errorBanner.AppendLine();
-                errorBanner.AppendLine("========== انتهى البناء بفشل: 0 نجاح، 1 فشل ==========");
-
-                _consoleOutputTextBox.ForeColor = Color.FromArgb(255, 120, 120);
-                _consoleOutputTextBox.Text = errorBanner.ToString();
-
-                _statusLabel.Text = $"❌ تم اكتشاف ({totalErrors}) خطأ في الكود (انظر تبويب قائمة الأخطاء)";
-
-                if (isExecutionRun)
+                // 3. عرض جدول الرموز (Symbol Table)
+                foreach (var s in result.SymbolTable)
                 {
-                    _outputTabControl.SelectedTab = _tabErrors; // الانتقال التلقائي لتبويب قائمة الأخطاء
+                    _symbolTableGrid.Rows.Add(s.Name, s.DataType, s.Kind, s.Value, s.DeclaredLine, s.ReferencedLines);
                 }
-            }
-            else
-            {
-                var successSb = new StringBuilder();
-                successSb.AppendLine("========== بدء البناء والترجمة: مشروع لغة البرمجة العربية ==========");
-                successSb.AppendLine("1> المحلل المعجمي (Lexer): تم استخراج كافة الرموز بنجاح.");
-                successSb.AppendLine("1> المحلل النحوي (Parser): تم بناء شجرة الإعراب (AST) بنجاح.");
-                successSb.AppendLine("1> المحلل الدلالي (Semantic): تم فحص جدول الرموز والأنواع بنجاح بدون أخطاء.");
-                successSb.AppendLine($"1> الكود الوسيط (TAC): تم توليد ({result.TAC.Count}) تعليمة ثلاثية العناوين.");
-                successSb.AppendLine("1> مولد كود التجميع (Assembly): تم توليد كود x86 و .NET CIL بنجاح.");
-                successSb.AppendLine("========== البناء: نجح 1، فشل 0، تم التحديث 0 ==========");
-                
 
-
-                if (isExecutionRun)
+                // 4. عرض الكود الوسيط (TAC)
+                var tacSb = new StringBuilder();
+                foreach (var line in result.TAC)
                 {
-                    successSb.AppendLine();
-                    successSb.AppendLine("🚀 تم إطلاق البرنامج في نافذة تنفيذ أوامر مستقلة منفصلة (Visual Studio Debug Console)...");
-                    successSb.AppendLine("💡 يمكنك إدخال القيم لتعليمة 'اقرا' مباشرة عبر لوحة المفاتيح والضغط على Enter.");
-                    _statusLabel.Text = "✔️ تم البناء بنجاح وإطلاق البرنامج في نافذة CMD خارجية مستقلة";
+                    tacSb.AppendLine(line);
+                }
+                _tacTextBox.Text = tacSb.ToString();
+
+                // 5. عرض لغة التجميع (x86 Assembly)
+                _asmTextBox.Text = result.AssemblyCode;
+
+                // 6. عرض .NET CIL
+                _cilTextBox.Text = result.CILCode;
+
+                // 7. عرض الأخطاء (Errors)
+                bool hasErrors = false;
+                var consoleSb = new StringBuilder();
+                int errorNumber = 1;
+
+                if (result.SyntaxErrors.Count > 0)
+                {
+                    hasErrors = true;
+                    foreach (var err in result.SyntaxErrors)
+                    {
+                        int line = ExtractLineNumber(err);
+                        _errorsGrid.Rows.Add(errorNumber++, line > 0 ? line.ToString() : "-", "خطأ نحوي (Syntax)", err);
+                        consoleSb.AppendLine($"⚠️ [خطأ نحوي]: {err}");
+                    }
+                }
+
+                if (result.SemanticErrors.Count > 0)
+                {
+                    hasErrors = true;
+                    foreach (var err in result.SemanticErrors)
+                    {
+                        int line = ExtractLineNumber(err);
+                        _errorsGrid.Rows.Add(errorNumber++, line > 0 ? line.ToString() : "-", "خطأ دلالي (Semantic)", err);
+                        consoleSb.AppendLine($"⚠️ [خطأ دلالي]: {err}");
+                    }
+                }
+
+                int totalErrors = result.SyntaxErrors.Count + result.SemanticErrors.Count;
+                _tabErrors.Text = hasErrors ? $"⚠️ قائمة الأخطاء ({totalErrors})" : "⚠️ قائمة الأخطاء";
+
+                // 8. التعامل مع شاشة التشغيل (Visual Studio Command Prompt Theme)
+                if (hasErrors)
+                {
+                    var errorBanner = new StringBuilder();
+                    errorBanner.AppendLine("========== بدء البناء: فحص واكتشاف الأخطاء ==========");
+                    errorBanner.AppendLine($"❌ فشلت الترجمة: تم اكتشاف ({totalErrors}) خطأ في الكود المصدري.");
+                    errorBanner.AppendLine();
+                    errorBanner.Append(consoleSb);
+                    errorBanner.AppendLine();
+                    errorBanner.AppendLine("========== انتهى البناء بفشل: 0 نجاح، 1 فشل ==========");
+
+                    _consoleOutputTextBox.ForeColor = Color.FromArgb(255, 120, 120);
+                    _consoleOutputTextBox.Text = errorBanner.ToString();
+
+                    _statusLabel.Text = $"❌ تم اكتشاف ({totalErrors}) خطأ في الكود (انظر تبويب قائمة الأخطاء)";
+
+                    if (isExecutionRun)
+                    {
+                        _outputTabControl.SelectedTab = _tabErrors;
+                    }
                 }
                 else
                 {
-                    _statusLabel.Text = "✔️ الكود البرمجي سليم نحوياً ودلالياً 100%";
-                }
+                    var successSb = new StringBuilder();
+                    successSb.AppendLine("========== بدء البناء والترجمة: مشروع لغة البرمجة العربية ==========");
+                    successSb.AppendLine("1> المحلل المعجمي (Lexer): تم استخراج كافة الرموز بنجاح.");
+                    successSb.AppendLine("1> المحلل النحوي (Parser): تم بناء شجرة الإعراب (AST) بنجاح.");
+                    successSb.AppendLine("1> المحلل الدلالي (Semantic): تم فحص جدول الرموز والأنواع بنجاح بدون أخطاء.");
+                    successSb.AppendLine($"1> الكود الوسيط (TAC): تم توليد ({result.TAC.Count}) تعليمة ثلاثية العناوين.");
+                    successSb.AppendLine("1> مولد كود التجميع (Assembly): تم توليد كود x86 و .NET CIL بنجاح.");
+                    successSb.AppendLine("========== البناء: نجح 1، فشل 0، تم التحديث 0 ==========");
 
-                _consoleOutputTextBox.ForeColor = Color.FromArgb(180, 230, 180);
-                _consoleOutputTextBox.Text = successSb.ToString();
+                    if (isExecutionRun)
+                    {
+                        successSb.AppendLine();
+                        successSb.AppendLine("🚀 تم إطلاق البرنامج في نافذة تنفيذ أوامر مستقلة منفصلة (Visual Studio Debug Console)...");
+                        successSb.AppendLine("💡 يمكنك إدخال القيم لتعليمة 'اقرا' مباشرة عبر لوحة المفاتيح والضغط على Enter.");
+                        _statusLabel.Text = "✔️ تم البناء بنجاح وإطلاق البرنامج في نافذة CMD خارجية مستقلة";
+                    }
+                    else
+                    {
+                        _statusLabel.Text = "✔️ الكود البرمجي سليم نحوياً ودلالياً 100%";
+                    }
+
+                    _consoleOutputTextBox.ForeColor = Color.FromArgb(180, 230, 180);
+                    _consoleOutputTextBox.Text = successSb.ToString();
+                }
+            }
+            finally
+            {
+                _tokensGrid.ResumeLayout();
+                _symbolTableGrid.ResumeLayout();
+                _errorsGrid.ResumeLayout();
+                _cstTreeView.EndUpdate();
+                _astTreeView.EndUpdate();
             }
         }
 

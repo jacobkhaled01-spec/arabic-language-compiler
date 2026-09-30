@@ -18,7 +18,10 @@ namespace CompilerCPP {
         SymbolTable& _symbolTable;
         std::vector<std::string> _errors;
         std::unordered_map<std::string, std::vector<ParamMetadata>> _procedureSignatures;
+        std::unordered_map<std::string, long long> _arrayTypeSizes;
+        std::unordered_map<std::string, long long> _arrayVarSizes;
 
+        void AddError(const std::string& err);
         void PopulateDeclarations(const std::shared_ptr<Node>& root);
         void CheckStatementsAndReferences(const std::shared_ptr<Node>& node);
         void CheckExpressionVariables(const std::shared_ptr<Node>& exprNode);
