@@ -81,7 +81,7 @@ namespace CompilerProject.CodeGeneration
                 if (isVerbose) Console.WriteLine("🔹 [3/6 & 4/6] مرحلة جدول الرموز والتحليل الدلالي (Semantic Analysis)...");
                 var symbolTable = new SymbolTable();
                 var semanticAnalyzer = new SemanticAnalyzer(symbolTable);
-                bool isSemanticallyValid = semanticAnalyzer.Analyze(astRoot);
+                bool isSemanticallyValid = semanticAnalyzer.Analyze(astRoot!);
 
                 foreach (var sym in symbolTable.GetAll())
                 {

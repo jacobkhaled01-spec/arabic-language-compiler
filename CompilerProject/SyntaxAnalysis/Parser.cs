@@ -42,6 +42,8 @@ namespace CompilerProject.SyntaxAnalysis
             return false;
         }
 
+        private bool MatchComma() => Match("،") || Match(",");
+
         private Token Expect(string val, string errorMessage)
         {
             if (Current.Value == val)
@@ -97,13 +99,9 @@ namespace CompilerProject.SyntaxAnalysis
             rootNode.AddChild(blockNode);
 
             // يجب أن ينتهي البرنامج بنقطة .
-            if (Current.Value == ".")
+            while (Current.Value is "." or "}" or "{" or "؛")
             {
                 Advance();
-            }
-            else
-            {
-                Errors.Add($"خطأ نحوي في السطر {Current.Line}: يجب أن ينتهي البرنامج بنقطة '.'");
             }
 
             if (Errors.Count > 0 && rootNode.Children.Count == 0)
@@ -213,7 +211,7 @@ namespace CompilerProject.SyntaxAnalysis
                             while (Current.Type == TokenType.Identifier)
                             {
                                 var fieldNames = new List<string> { Advance().Value };
-                                while (Match(","))
+                                while (MatchComma())
                                 {
                                     fieldNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم الحقل").Value);
                                 }
@@ -251,7 +249,7 @@ namespace CompilerProject.SyntaxAnalysis
                     while (Current.Type == TokenType.Identifier)
                     {
                         var varNames = new List<Token> { Advance() };
-                        while (Match(","))
+                        while (MatchComma())
                         {
                             varNames.Add(ExpectType(TokenType.Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
                         }
@@ -295,7 +293,7 @@ namespace CompilerProject.SyntaxAnalysis
                         }
 
                         var paramNames = new List<string> { ExpectType(TokenType.Identifier, "اسم المعلمة").Value };
-                        while (Match(","))
+                        while (MatchComma())
                         {
                             paramNames.Add(ExpectType(TokenType.Identifier, "اسم المعلمة").Value);
                         }
@@ -328,10 +326,17 @@ namespace CompilerProject.SyntaxAnalysis
         /// </summary>
         private Node ParseStatementList()
         {
-            Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+            if (Current.Value is "{" or "}")
+            {
+                Advance();
+            }
+            else
+            {
+                Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+            }
             var stmtListNode = new Node("StatementList", Current.Line);
 
-            while (Current.Value != "}" && Current.Type != TokenType.EndOfFile)
+            while (Current.Value != "}" && Current.Value != "{" && Current.Value != "." && Current.Type != TokenType.EndOfFile)
             {
                 try
                 {
@@ -357,7 +362,10 @@ namespace CompilerProject.SyntaxAnalysis
                 }
             }
 
-            Expect("}", "يجب إغلاق قوس المجموعة '}' لقائمة التعليمات");
+            if (Current.Value is "}" or "{")
+            {
+                Advance();
+            }
             return stmtListNode;
         }
 
@@ -368,20 +376,28 @@ namespace CompilerProject.SyntaxAnalysis
         {
             if (Current.Value == "}") return null;
 
-            // 1. جملة الإدخال: اقرا ( س ) أو اقرا س
+            // 1. جملة الإدخال: اقرا ( س ) أو اقرا ( س ، ص ) أو اقرا س ، ص
             if (Current.Value is "اقرا" or "اقرأ" or "اقرء")
             {
                 int line = Current.Line;
                 string kw = Advance().Value;
                 bool hasParen = Match("(");
+                var readNode = new Node("ReadStatement", line);
+
                 var varNode = ParseAccessVariable();
-                if (hasParen)
+                readNode.AddChild(varNode);
+
+                while (MatchComma())
                 {
-                    Expect(")", $"يجب إغلاق القوس ')' بعد متغير الإدخال لتعليمة '{kw}'");
+                    var nextVar = ParseAccessVariable();
+                    readNode.AddChild(nextVar);
                 }
 
-                var readNode = new Node("ReadStatement", line);
-                readNode.AddChild(varNode);
+                if (hasParen)
+                {
+                    Expect(")", $"يجب إغلاق القوس ')' بعد متغيرات الإدخال لتعليمة '{kw}'");
+                }
+
                 return readNode;
             }
 
@@ -406,7 +422,7 @@ namespace CompilerProject.SyntaxAnalysis
                     {
                         printNode.AddChild(ParseExpression());
                     }
-                } while (Match(","));
+                } while (MatchComma());
 
                 Expect(")", "يجب إغلاق القوس ')' بعد جملة الإخراج");
                 return printNode;
@@ -423,9 +439,11 @@ namespace CompilerProject.SyntaxAnalysis
             {
                 int line = Current.Line;
                 Advance();
-                Expect("(", "يجب فتح قوس '(' لشرط طالما");
+                if (Current.Value is "(" or ")") Advance();
+                else Expect("(", "يجب فتح قوس '(' لشرط طالما");
                 var condNode = ParseExpression();
-                Expect(")", "يجب إغلاق قوس شرط طالما ')'");
+                if (Current.Value is ")" or "(") Advance();
+                else Expect(")", "يجب إغلاق قوس شرط طالما ')'");
                 Expect("استمر", "يجب كتابة كلمة 'استمر' بعد شرط طالما");
                 var bodyNode = ParseStatementOrBlock();
 
@@ -442,9 +460,11 @@ namespace CompilerProject.SyntaxAnalysis
                 Advance();
                 var bodyNode = ParseStatementOrBlock();
                 Expect("حتى", "يجب كتابة كلمة 'حتى' بعد تعليمة اعد");
-                Expect("(", "يجب فتح قوس '(' لشرط حتى");
+                if (Current.Value is "(" or ")") Advance();
+                else Expect("(", "يجب فتح قوس '(' لشرط حتى");
                 var condNode = ParseExpression();
-                Expect(")", "يجب إغلاق قوس شرط حتى ')'");
+                if (Current.Value is ")" or "(") Advance();
+                else Expect(")", "يجب إغلاق قوس شرط حتى ')'");
 
                 var repeatNode = new Node("RepeatUntilStatement", line);
                 repeatNode.AddChild(bodyNode);
@@ -483,7 +503,7 @@ namespace CompilerProject.SyntaxAnalysis
             }
 
             // 7. كتلة متداخلة { ... }
-            if (Current.Value == "{")
+            if (Current.Value is "{" or "}")
             {
                 return ParseStatementList();
             }
@@ -505,17 +525,17 @@ namespace CompilerProject.SyntaxAnalysis
                 }
 
                 // إذا تلاها قوس ( فهو استدعاء إجراء
-                if (Match("("))
+                if (Match("(") || Match(")"))
                 {
                     var callNode = new Node("CallStatement", varAccess.Name, line);
-                    if (Current.Value != ")")
+                    if (Current.Value != ")" && Current.Value != "(")
                     {
                         do
                         {
                             callNode.AddChild(ParseExpression());
-                        } while (Match(","));
+                        } while (MatchComma());
                     }
-                    Expect(")", "يجب إغلاق قوس استدعاء الإجراء ')'");
+                    if (Current.Value is ")" or "(") Advance();
                     return callNode;
                 }
 
@@ -528,7 +548,7 @@ namespace CompilerProject.SyntaxAnalysis
 
         private Node ParseStatementOrBlock()
         {
-            if (Current.Value == "{")
+            if (Current.Value is "{" or "}")
             {
                 return ParseStatementList();
             }
@@ -542,9 +562,11 @@ namespace CompilerProject.SyntaxAnalysis
         {
             int line = Current.Line;
             Advance(); // تخطي 'اذا'
-            Expect("(", "يجب فتح قوس '(' لشرط اذا");
+            if (Current.Value is "(" or ")") Advance();
+            else Expect("(", "يجب فتح قوس '(' لشرط اذا");
             var condNode = ParseExpression();
-            Expect(")", "يجب إغلاق قوس شرط اذا ')'");
+            if (Current.Value is ")" or "(") Advance();
+            else Expect(")", "يجب إغلاق قوس شرط اذا ')'");
             Expect("فان", "يجب كتابة كلمة 'فان' بعد شرط اذا");
 
             var thenBody = ParseStatementOrBlock();
@@ -712,10 +734,10 @@ namespace CompilerProject.SyntaxAnalysis
             }
 
             // تعبير محصور بين أقواس ( تعبير )
-            if (Match("("))
+            if (Match("(") || Match(")"))
             {
                 var expr = ParseExpression();
-                Expect(")", "يجب إغلاق القوس ')'");
+                if (Current.Value is ")" or "(") Advance();
                 return expr;
             }
 
@@ -746,8 +768,8 @@ namespace CompilerProject.SyntaxAnalysis
                 return charNode;
             }
 
-            // قيمة منطقية (صح / خطأ)
-            if (Current.Value is "صح" or "خطأ")
+            // قيمة منطقية (صح / خطأ / صواب / خطا)
+            if (Current.Value is "صح" or "خطأ" or "صواب" or "خطا")
             {
                 var boolToken = Advance();
                 var boolNode = new Node("BooleanLiteral", line);

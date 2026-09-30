@@ -46,6 +46,15 @@ namespace CompilerCPP {
                 Children[i]->Print(newIndent, i == Children.size() - 1);
             }
         }
+
+        std::string RenderTree(const std::string& indent = "", bool isLast = true) const {
+            std::string res = indent + (isLast ? "└── " : "├── ") + ToString() + "\n";
+            std::string newIndent = indent + (isLast ? "    " : "│   ");
+            for (size_t i = 0; i < Children.size(); ++i) {
+                res += Children[i]->RenderTree(newIndent, i == Children.size() - 1);
+            }
+            return res;
+        }
     };
 
 } // namespace CompilerCPP

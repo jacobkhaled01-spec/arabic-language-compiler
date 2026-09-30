@@ -1,0 +1,1562 @@
+% !TEX TS-program = xelatex
+% !TEX encoding = UTF-8 Unicode
+% ═══════════════════════════════════════════════════════════════════════════════
+%   تقرير مشروع مترجم لغة البرمجة العربية
+%   مقرر: بناء المترجمات (CS 351) — جامعة إب
+%   إشراف: د. خالد الكحصة | أ. عقيل الشرفي
+%   العام الجامعي: 2025/2026م  — الفصل الدراسي الأول
+%   توثيق APA 7th Edition
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\documentclass[12pt,a4paper]{report}
+
+% ─── الحزم الأساسية ──────────────────────────────────────────────────────────
+\usepackage{geometry}
+\geometry{a4paper, left=2.5cm, right=2.5cm, top=2.8cm, bottom=2.8cm}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage[numerals=maghrib]{arabic}
+\setotherlanguage{english}
+
+\newfontfamily\arabicfont[Script=Arabic, Scale=1.15, Ligatures=TeX]{Traditional Arabic}
+\newfontfamily\arabicfonttt[Script=Arabic, Scale=1.0]{Segoe UI}
+\setmainfont[Ligatures=TeX]{Times New Roman}
+\setmonofont[Scale=0.88]{Consolas}
+
+% ─── حزم الجداول والرياضيات والرسومات ──────────────────────────────────────
+\usepackage{amsmath, amssymb, mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array, longtable, tabularx, multirow, makecell}
+\usepackage{xcolor, colortbl}
+\usepackage{fancyhdr}
+\usepackage{titlesec, titletoc}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable, listings}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, decorations.pathreplacing}
+
+% ─── لوحة الألوان الأكاديمية ─────────────────────────────────────────────────
+\definecolor{PrimaryBlue}{HTML}{0D2137}
+\definecolor{SecondaryBlue}{HTML}{1A4D8F}
+\definecolor{AccentCyan}{HTML}{2E86AB}
+\definecolor{GoldYellow}{HTML}{B8860B}
+\definecolor{LightBg}{HTML}{F4F6FB}
+\definecolor{TableHead}{HTML}{E8EDF5}
+\definecolor{TableAlt}{HTML}{F8FAFC}
+\definecolor{BorderColor}{HTML}{C0CADE}
+\definecolor{CodeBg}{HTML}{FAFBFF}
+\definecolor{CodeKeyword}{HTML}{0000CD}
+\definecolor{CodeComment}{HTML}{5C7A5C}
+\definecolor{CodeString}{HTML}{8B0000}
+\definecolor{CodeNumber}{HTML}{B22222}
+\definecolor{SuccessGreen}{HTML}{1A7A2E}
+\definecolor{ErrorRed}{HTML}{A00000}
+
+% ─── إعدادات الروابط ────────────────────────────────────────────────────────
+\hypersetup{
+    colorlinks=true,
+    linkcolor=SecondaryBlue,
+    citecolor=PrimaryBlue,
+    urlcolor=AccentCyan,
+    pdfauthor={مجموعة (20) — قسم علوم الحاسوب — جامعة إب},
+    pdftitle={تقرير مشروع مترجم لغة البرمجة العربية},
+    pdfsubject={CS 351 — بناء المترجمات},
+    pdfkeywords={compiler, Arabic, C++20, C#, lexer, parser, semantic, TAC, assembly}
+}
+
+% ─── الترويسة والتذييل ───────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyhead[R]{\small\textcolor{SecondaryBlue}{\arabicfont مترجم لغة البرمجة العربية}}
+\fancyhead[L]{\small\textcolor{SecondaryBlue}{CS 351 | Ibb University | 2025--2026}}
+\fancyfoot[R]{\small\textcolor{gray}{\arabicfont كلية الحاسوب — جامعة إب}}
+\fancyfoot[C]{\small\textcolor{gray}{\thepage}}
+\fancyfoot[L]{\small\textcolor{gray}{G-20}}
+
+% ─── تنسيق العناوين ─────────────────────────────────────────────────────────
+\titleformat{\chapter}[display]
+  {\normalfont\LARGE\bfseries\color{PrimaryBlue}\arabicfont}
+  {\large\textcolor{GoldYellow}{\arabicfont الفصل\ \thechapter}}
+  {0.5ex}
+  {\titlerule[2pt]\vspace{0.8ex}\raggedleft}
+
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{SecondaryBlue}\arabicfont}
+  {\thesection}{0.8em}{}
+
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{PrimaryBlue}\arabicfont}
+  {\thesubsection}{0.8em}{}
+
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\color{AccentCyan}\arabicfont}
+  {\thesubsubsection}{0.8em}{}
+
+% ─── بيئات الأكواد البرمجية ──────────────────────────────────────────────────
+\lstdefinestyle{CSharpStyle}{
+    language=[Sharp]C,
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{CodeBg},
+    frame=single, rulecolor=\color{BorderColor},
+    breaklines=true, breakatwhitespace=true,
+    tabsize=4, showstringspaces=false,
+    keywordstyle=\color{CodeKeyword}\bfseries,
+    commentstyle=\color{CodeComment}\itshape,
+    stringstyle=\color{CodeString},
+    numberstyle=\tiny\color{gray},
+    numbers=left, numbersep=8pt,
+    xleftmargin=1.5em
+}
+
+\lstdefinestyle{CppStyle}{
+    language=C++,
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{CodeBg},
+    frame=single, rulecolor=\color{BorderColor},
+    breaklines=true, breakatwhitespace=true,
+    tabsize=4, showstringspaces=false,
+    keywordstyle=\color{CodeKeyword}\bfseries,
+    commentstyle=\color{CodeComment}\itshape,
+    stringstyle=\color{CodeString},
+    numberstyle=\tiny\color{gray},
+    numbers=left, numbersep=8pt,
+    xleftmargin=1.5em
+}
+
+\lstdefinestyle{ArabicCodeStyle}{
+    basicstyle=\ttfamily\small\arabicfont,
+    backgroundcolor=\color{LightBg},
+    frame=single, rulecolor=\color{GoldYellow},
+    breaklines=true, tabsize=4,
+    showstringspaces=false,
+    numbers=left, numberstyle=\tiny\color{gray},
+    numbersep=8pt, xleftmargin=1.5em
+}
+
+\lstdefinestyle{TACStyle}{
+    basicstyle=\ttfamily\small\color{PrimaryBlue},
+    backgroundcolor=\color{LightBg},
+    frame=single, rulecolor=\color{BorderColor},
+    breaklines=true, tabsize=4,
+    numbers=left, numberstyle=\tiny\color{gray},
+    numbersep=8pt, xleftmargin=1.5em
+}
+
+% ─── بيئات مربعات tcolorbox ──────────────────────────────────────────────────
+\newtcolorbox{InfoBox}[1][]{
+    colback=LightBg, colframe=SecondaryBlue,
+    arc=4pt, boxrule=0.8pt,
+    fonttitle=\bfseries\arabicfont\small,
+    #1
+}
+
+\newtcolorbox{KeyBox}[1][]{
+    colback=TableHead, colframe=GoldYellow,
+    arc=4pt, boxrule=1.2pt,
+    fonttitle=\bfseries\arabicfont\small,
+    #1
+}
+
+\newtcolorbox{CodeBox}[1][]{
+    colback=CodeBg, colframe=BorderColor,
+    arc=3pt, boxrule=0.6pt,
+    fonttitle=\bfseries\small,
+    #1
+}
+
+% ─── اختصارات مفيدة ─────────────────────────────────────────────────────────
+\newcommand{\keyword}[1]{\textcolor{CodeKeyword}{\textbf{\texttt{#1}}}}
+\newcommand{\filename}[1]{\textcolor{SecondaryBlue}{\texttt{#1}}}
+\newcommand{\arabickw}[1]{\textcolor{GoldYellow}{\textbf{\arabicfont #1}}}
+\newcommand{\phase}[2]{\textcolor{SecondaryBlue}{\textbf{#1}} (\textit{#2})}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\begin{document}
+\onehalfspacing
+
+% ═══════════════════════════════════════════════════════════════════════════════
+%  صفحة الغلاف الرسمية
+% ═══════════════════════════════════════════════════════════════════════════════
+\begin{titlepage}
+\begin{center}
+
+\vspace*{0.5cm}
+
+{\LARGE\bfseries\color{PrimaryBlue}\arabicfont جامعة إب — Ibb University}\\[0.4cm]
+{\large\color{SecondaryBlue}\arabicfont كلية الحاسوب وتكنولوجيا المعلومات}\\
+{\large\color{SecondaryBlue}\arabicfont قسم علوم الحاسوب وتقنية المعلومات}\\[0.6cm]
+
+\textcolor{GoldYellow}{\rule{\textwidth}{2.5pt}}\\[1.0cm]
+
+{\large\color{GoldYellow}\arabicfont التقرير الأكاديمي النهائي لمشروع مقرر}\\[0.5cm]
+
+{\Huge\bfseries\color{PrimaryBlue}\arabicfont مترجم لغة البرمجة العربية}\\[0.3cm]
+{\LARGE\bfseries\color{PrimaryBlue}\arabicfont ومحرر الأكواد التفاعلي المستقل}\\[0.5cm]
+
+{\Large\bfseries\color{AccentCyan}
+    Arabic Programming Language Compiler \\
+    (C++20 Backend + .NET 9 IDE)
+}\\[1.2cm]
+
+\begin{tcolorbox}[colback=LightBg, colframe=SecondaryBlue, arc=6mm, width=0.90\textwidth, boxrule=1pt]
+\begin{center}
+\begin{tabular}{r p{8.5cm}}
+    \textbf{\color{PrimaryBlue}\arabicfont المقرر الدراسي:}   & \arabicfont بناء المترجمات وتصميم لغات البرمجة (CS 351) \\[0.3cm]
+    \textbf{\color{PrimaryBlue}\arabicfont الأستاذ المشرف:}   & \arabicfont د. خالد الكحصة \\[0.3cm]
+    \textbf{\color{PrimaryBlue}\arabicfont مدرس العملي:}      & \arabicfont أ. عقيل الشرفي \\[0.4cm]
+    \textbf{\color{PrimaryBlue}\arabicfont أعضاء المجموعة 20:} & \arabicfont 1. يعقوب خالد المهاجري \\
+                                              & \arabicfont 2. سليمان صالح العربي \\
+                                              & \arabicfont 3. مالك عادل جبران \\
+                                              & \arabicfont 4. \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ \\
+                                              & \arabicfont 5. \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ \\[0.4cm]
+    \textbf{\color{PrimaryBlue}\arabicfont العام الجامعي:}    & \arabicfont 2025 / 2026 م \ (1446 / 1447 هـ) \\[0.2cm]
+    \textbf{\color{PrimaryBlue}\arabicfont الفصل الدراسي:}   & \arabicfont الفصل الدراسي الأول \\
+\end{tabular}
+\end{center}
+\end{tcolorbox}
+
+\vfill
+
+\textcolor{GoldYellow}{\rule{\textwidth}{1.5pt}}\\[0.3cm]
+{\small\color{gray}\arabicfont
+    التوثيق وفق معايير الجمعية الأمريكية لعلم النفس — الإصدار السابع
+    \textbf{(APA 7\textsuperscript{th} Edition)}
+}
+
+\end{center}
+\end{titlepage}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+%  ملخص تنفيذي
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter*{الملخص التنفيذي}
+\addcontentsline{toc}{chapter}{الملخص التنفيذي}
+
+\begin{KeyBox}[title={ملخص المشروع}]
+\arabicfont
+يُقدِّم هذا التقرير توثيقًا أكاديميًا شاملًا لمشروع \textbf{مترجم لغة البرمجة العربية}، وهو نظام برمجي متكامل يُترجم البرامج المكتوبة بالعربية الفصحى ويُنفِّذها. يتألف النظام من تطبيقَين مستقلَّين: مترجم نواة مكتوب بلغة \textbf{C++20} يُجري ست مراحل ترجمة كاملة، ومحرر أكواد رسومي تفاعلي (IDE) مكتوب بـ\textbf{C\# / .NET 9}. يتوافق المشروع مع متطلبات مقرر (CS 351) ويُوثَّق وفق معايير \textbf{APA 7}.
+\end{KeyBox}
+
+\vspace{0.5cm}
+
+\textbf{\arabicfont النتائج الرئيسية:}
+\begin{itemize}[rightmargin=1cm]
+    \item تنفيذ المراحل الست الكلاسيكية للترجمة بالكامل: التحليل المعجمي، النحوي، الدلالي، توليد الكود الوسيط TAC، المفسر الافتراضي، وتوليد كود التجميع x86-64.
+    \item دعم 25 كلمة محجوزة عربية، والأرقام العربية (٠-٩)، وأشكال الهمزة المتعددة.
+    \item آلية استرداد من الأخطاء (Panic Mode Recovery) تتيح الاستمرار في الترجمة بعد الخطأ.
+    \item حزمة 10 أمثلة اختبارية موثقة تغطي جميع تراكيب اللغة.
+    \item واجهة رسومية (IDE) تعرض ثمانية أنواع من مخرجات المترجم في الوقت الحقيقي.
+\end{itemize}
+
+\newpage
+
+% ─── فهارس ───────────────────────────────────────────────────────────────────
+\tableofcontents
+\newpage
+\listoffigures
+\newpage
+\listoftables
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{مقدمة المشروع وأهدافه}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{السياق الأكاديمي وأهمية المشروع}
+
+تُعدُّ المترجمات (Compilers) من أعقد البرامج وأكثرها تأثيرًا في علوم الحاسوب؛ إذ تشكِّل الجسر الذي يربط اللغات البرمجية عالية المستوى بلغة الآلة القابلة للتنفيذ. انطلاقًا من هذه الأهمية، صُمِّم مقرر بناء المترجمات (CS 351) في جامعة إب ليُلزم الطلابَ ببناء مترجم متكامل تطبيقيًا (Al-Kahsah, 2025).
+
+يرتكز هذا المشروع على بناء مترجم لغة برمجة \textbf{عربية} كاملة، مما يُضيف بُعدًا تقنيًا إضافيًا: معالجة الترميز UTF-8 والنصوص ثنائية الاتجاه (BiDi) وخوارزميات تطبيع الأحرف العربية. يُمثِّل ذلك إسهامًا في مجال حوسبة اللغة العربية (Arabic Language Computing) الذي يشهد اهتمامًا متناميًا في الأبحاث الأكاديمية (Al-Kharashi \& Evens, 1994).
+
+\section{أهداف المشروع}
+
+\begin{enumerate}[label=\textbf{\arabic*.}, rightmargin=0.5cm]
+    \item \textbf{الهدف المعرفي:} التطبيق العملي الكامل لنظريات الأتمتة والمترجمات وفق كتاب المرجع (Aho et al., 2007).
+    \item \textbf{الهدف التقني:} بناء مترجم ست مراحل يعمل على لغة برمجة عربية حقيقية.
+    \item \textbf{الهدف المعماري:} تطبيق مبدأ الفصل بين المكونات (Separation of Concerns) عبر بناء مترجم مستقل (C++) ومحرر مستقل (C#).
+    \item \textbf{الهدف التوثيقي:} إنتاج توثيق أكاديمي كامل وفق معايير APA 7.
+\end{enumerate}
+
+\section{نطاق المشروع}
+
+يُغطِّي النظام المُنجَز النطاق التالي:
+
+\begin{table}[H]
+\caption{\arabicfont نطاق المشروع والمكونات المُنجزة}
+\label{tab:scope}
+\centering
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont المكوِّن} & \textbf{\arabicfont الوصف} & \textbf{\arabicfont اللغة} \\
+\hline
+\arabicfont المترجم الأساسي & \arabicfont مترجم ست مراحل مكتوب يدويًا (Handwritten) دون مولدات خارجية & C++20 \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont المترجم الثانوي & \arabicfont مترجم موازٍ يُجري نفس المراحل كتطبيق مرجعي & C\# .NET 9 \\
+\hline
+\arabicfont محرر الأكواد & \arabicfont بيئة تطوير تفاعلية (WinForms IDE) مع 8 تبويبات & C\# .NET 9 \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont مكتبة الأمثلة & \arabicfont 12 برنامجًا اختباريًا (.arb) تغطي كل التراكيب & \arabicfont عربية \\
+\hline
+\arabicfont الوثائق & \arabicfont تقرير أكاديمي، دليل القواعد، دليل المناقشة & \arabicfont عربية/إنجليزية \\
+\hline
+\end{tabularx}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{هيكل النظام والمعمارية العامة}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{المعمارية الكلية للنظام}
+
+يعتمد النظام معمارية \textbf{خط أنابيب تسلسلي} (Sequential Pipeline Architecture) مقسَّمًا إلى طبقتين رئيسيتين مستقلتَين تتواصلان عبر واجهة JSON:
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.7cm and 0.5cm,
+        box/.style={rectangle, draw=SecondaryBlue, fill=LightBg, rounded corners=4pt, 
+                    text width=3.2cm, align=center, font=\small\arabicfont, 
+                    minimum height=0.9cm, line width=0.7pt},
+        arrowstyle/.style={-Latex, thick, color=SecondaryBlue},
+        phasebox/.style={rectangle, draw=GoldYellow, fill=TableHead, rounded corners=3pt,
+                         text width=2.8cm, align=center, font=\small, minimum height=0.75cm,
+                         line width=1pt},
+    ]
+    % Compiler Pipeline
+    \node[box] (src)    {\arabicfont الكود المصدري\\ \texttt{(.arb)}};
+    \node[phasebox, right=of src]  (lex)   {1. Lexer\\\arabicfont معجمي};
+    \node[phasebox, right=of lex]  (par)   {2. Parser\\\arabicfont نحوي};
+    \node[phasebox, right=of par]  (sem)   {3. Semantic\\\arabicfont دلالي};
+    \node[phasebox, below=of sem]  (tac)   {4. TAC Gen\\\arabicfont وسيط};
+    \node[phasebox, left=of tac]   (vm)    {5. VM Exec\\\arabicfont تنفيذ};
+    \node[phasebox, left=of vm]    (asm)   {6. Assembly\\\arabicfont تجميع};
+    \node[box, left=of asm]        (out)   {\arabicfont المخرجات\\\arabicfont (JSON)};
+
+    \draw[arrowstyle] (src) -- (lex);
+    \draw[arrowstyle] (lex) -- (par);
+    \draw[arrowstyle] (par) -- (sem);
+    \draw[arrowstyle] (sem) -- (tac);
+    \draw[arrowstyle] (tac) -- (vm);
+    \draw[arrowstyle] (tac) -- (asm);
+    \draw[arrowstyle] (vm)  -- (out);
+    \draw[arrowstyle] (asm) -- (out);
+
+    % Labels
+    \node[above=0.1cm of src, font=\tiny\color{gray}] {\arabicfont مدخل};
+    \node[above=0.1cm of out, font=\tiny\color{gray}] {\arabicfont مخرج};
+    \end{tikzpicture}
+    \caption{\arabicfont معمارية خط أنابيب المترجم العربي — المراحل الست}
+    \label{fig:pipeline}
+\end{figure}
+
+\section{التواصل بين المحرر والمترجم (IPC Architecture)}
+
+يتواصل المحرر الرسومي مع مترجم C++ عبر بروتوكول \textbf{Standard I/O JSON}:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    comp/.style={rectangle, draw=SecondaryBlue, fill=LightBg, rounded corners=5pt,
+                 minimum width=4cm, minimum height=1.5cm, font=\small\arabicfont, align=center},
+    arrow/.style={-Latex, thick, AccentCyan}
+]
+\node[comp, fill=TableHead]    (ide)  {\textbf{\arabicfont محرر الأكواد}\\ \filename{LanguageEditor.exe}\\ \texttt{C\# .NET 9}};
+\node[comp, right=5cm of ide]  (cmp)  {\textbf{\arabicfont مترجم C++}\\ \filename{Compiler.exe}\\ \texttt{C++20 MSVC}};
+
+\draw[arrow] (ide.east) -- node[above, font=\tiny] {\texttt{source.arb --json}} (cmp.west);
+\draw[arrow, bend right=20] (ide.south east) to node[below, font=\tiny] {\texttt{stdin: user\_input}} (cmp.south west);
+\draw[arrow, bend right=15, dashed] (cmp.north west) to node[above, font=\tiny] {\texttt{stdout: JSON result}} (ide.north east);
+\end{tikzpicture}
+\caption{\arabicfont بروتوكول التواصل IPC بين المحرر ومترجم C++}
+\label{fig:ipc}
+\end{figure}
+
+\section{هيكل ملفات المشروع}
+
+\begin{table}[H]
+\caption{\arabicfont هيكل المجلدات والملفات الرئيسية}
+\label{tab:structure}
+\centering
+\small
+\begin{tabular}{|l|l|r|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont المسار} & \textbf{\arabicfont المحتوى} & \textbf{\arabicfont الحجم} \\
+\hline
+\texttt{CompilerProject/} & \arabicfont مترجم C\# .NET 9 الكامل & — \\
+\texttt{\ \ LexicalAnalysis/Lexer.cs} & \arabicfont المحلل المعجمي & 9.1 KB \\
+\texttt{\ \ SyntaxAnalysis/Parser.cs} & \arabicfont المحلل النحوي (773 سطر) & 30.9 KB \\
+\texttt{\ \ SemanticAnalysis/Semantic.cs} & \arabicfont المحلل الدلالي & 6.6 KB \\
+\texttt{\ \ IntermediateCode/ICG.cs} & \arabicfont مولد TAC & 11.1 KB \\
+\texttt{\ \ CodeGeneration/Assembly.cs} & \arabicfont مولد كود التجميع & 21.4 KB \\
+\texttt{\ \ Common/SymbolTable.cs} & \arabicfont جدول الرموز & 5.5 KB \\
+\hline
+\rowcolor{TableAlt}
+\texttt{CompilerProject\_CPP/} & \arabicfont مترجم C++20 الأصلي & — \\
+\texttt{\ \ src/LexicalAnalysis/} & \arabicfont Lexer.cpp & 9.8 KB \\
+\texttt{\ \ src/SyntaxAnalysis/} & \arabicfont Parser.cpp & — \\
+\texttt{\ \ src/main.cpp} & \arabicfont نقطة الانطلاق & 5.0 KB \\
+\hline
+\texttt{LanguageEditor/} & \arabicfont محرر WinForms & — \\
+\texttt{\ \ MainForm.cs} & \arabicfont الواجهة الرئيسية & 48.3 KB \\
+\hline
+\rowcolor{TableAlt}
+\texttt{Examples/} & \arabicfont 12 برنامجاً اختبارياً (.arb) & — \\
+\hline
+\end{tabular}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{لغة البرمجة العربية: القواعد والمواصفات}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{نظرة عامة على اللغة}
+
+لغة البرمجة العربية (Arabic Programming Language — APL) هي لغة إجرائية (Procedural Language) عالية المستوى، تُكتَب بالعربية الفصحى من اليمين لليسار، وتُصنَّف ضمن لغات LL(1) القابلة للتحليل بخوارزمية النزول العودي.
+
+\section{قواعد اللغة بصيغة EBNF الموسَّعة}
+
+\begin{CodeBox}[title={\small قواعد اللغة بصيغة EBNF (Extended Backus–Naur Form)}]
+\begin{lstlisting}[basicstyle=\ttfamily\small]
+<program>      ::= "برنامج" <identifier> "؛" <block> "."
+<block>        ::= [<declarations>] "{" <stmt-list> "}"
+<declarations> ::= {<const-decl> | <var-decl> | <type-decl> | <proc-decl>}
+<const-decl>   ::= "ثابت" {<identifier> "=" <literal> "؛"}
+<var-decl>     ::= "متغير" <id-list> ":" <datatype> "؛"
+<type-decl>    ::= "نوع" <identifier> "=" ("قائمة" "[" <number> "]" "من" <datatype>
+                   | "سجل" "{" {<id-list> ":" <datatype> "؛"} "}") "؛"
+<datatype>     ::= "صحيح" | "حقيقي" | "منطقي" | "حرفي" | "خيط_رمزي"
+<statement>    ::= <assign> | <if-stmt> | <while-stmt>
+                   | <repeat-stmt> | <for-stmt>
+                   | <read-stmt> | <print-stmt>
+<assign>       ::= <identifier> {"[" <expr> "]"} "=" <expr> "؛"
+<if-stmt>      ::= "اذا" "(" <expr> ")" "فان" <stmt> ["والا" <stmt>] "؛"
+<while-stmt>   ::= "طالما" "(" <expr> ")" "استمر" <stmt> "؛"
+<repeat-stmt>  ::= "اعد" <stmt> "حتى" "(" <expr> ")" "؛"
+<for-stmt>     ::= "كرر" "(" <id> "=" <expr> "الى" <expr> ["اضف" <expr>] ")" <stmt> "؛"
+<read-stmt>    ::= ("اقرا" | "اقرأ" | "اقرء") ["("] <identifier> [")"] "؛"
+<print-stmt>   ::= "اطبع" "(" <expr-list> ")" "؛"
+<expr>         ::= <logical-or>
+<logical-or>   ::= <logical-and> {"||" <logical-and>}
+<logical-and>  ::= <comparison> {"&&" <comparison>}
+<comparison>   ::= <additive> {("==" | "!=" | "<" | ">" | "<=" | ">=") <additive>}
+<additive>     ::= <multiplicative> {("+" | "-") <multiplicative>}
+<multiplicative>::= <unary> {("*" | "/" | "\" | "%" | "^") <unary>}
+<unary>        ::= ["!" | "-"] <primary>
+<primary>      ::= <number> | <string> | <identifier> | "(" <expr> ")"
+                   | "صح" | "خطأ"
+\end{lstlisting}
+\end{CodeBox}
+
+\section{هرم أولوية المعاملات}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\node[draw=SecondaryBlue, fill=LightBg, rounded corners, 
+      text width=10cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0, 0)    {\textbf{الأولوية الأعلى}: \texttt{( )} \hspace{0.5cm} القوسان};
+\node[draw=SecondaryBlue, fill=TableAlt, rounded corners,
+      text width=10.5cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-0.9)  {\texttt{\^{}} \hspace{0.5cm} الأس والقوة};
+\node[draw=SecondaryBlue, fill=LightBg, rounded corners,
+      text width=11cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-1.8)  {\texttt{!} \hspace{0.5cm} النفي المنطقي والأحادي};
+\node[draw=SecondaryBlue, fill=TableAlt, rounded corners,
+      text width=11.5cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-2.7)  {\texttt{* / \textbackslash{} \%} \hspace{0.5cm} الضرب والقسمة والباقي};
+\node[draw=SecondaryBlue, fill=LightBg, rounded corners,
+      text width=12cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-3.6)  {\texttt{+ -} \hspace{0.5cm} الجمع والطرح};
+\node[draw=SecondaryBlue, fill=TableAlt, rounded corners,
+      text width=12.5cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-4.5)  {\texttt{== != < > <= >=} \hspace{0.5cm} المقارنة};
+\node[draw=SecondaryBlue, fill=LightBg, rounded corners,
+      text width=13cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-5.4)  {\texttt{\&\&} \hspace{0.5cm} و المنطقي (AND)};
+\node[draw=SecondaryBlue, fill=TableAlt, rounded corners,
+      text width=13.5cm, align=center, font=\small\arabicfont,
+      minimum height=0.7cm] at (0,-6.3)  {\textbf{الأولوية الأدنى}: \texttt{||} \hspace{0.5cm} أو المنطقي (OR)};
+\end{tikzpicture}
+\caption{\arabicfont هرم أولوية المعاملات في لغة البرمجة العربية}
+\label{fig:precedence}
+\end{figure}
+
+\section{الكلمات المحجوزة والرموز الخاصة}
+
+\begin{table}[H]
+\caption{\arabicfont الكلمات المحجوزة في لغة البرمجة العربية}
+\label{tab:keywords}
+\centering
+\small
+\begin{tabular}{|c|c|c|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont الفئة} & \textbf{\arabicfont الكلمة} & \textbf{\arabicfont المعادل الإنجليزي} & \textbf{\arabicfont الغرض} \\
+\hline
+\arabicfont هيكل البرنامج & \arabickw{برنامج} & \keyword{program} & \arabicfont تعريف البرنامج \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont التصريحات & \arabickw{ثابت} & \keyword{const} & \arabicfont تعريف ثوابت \\
+& \arabickw{متغير} & \keyword{var} & \arabicfont تعريف متغيرات \\
+& \arabickw{نوع} & \keyword{type} & \arabicfont تعريف أنواع \\
+& \arabickw{اجراء} & \keyword{procedure} & \arabicfont تعريف اجراءات \\
+\hline
+\arabicfont أنواع البيانات & \arabickw{صحيح} & \keyword{int} & \arabicfont عدد صحيح \\
+& \arabickw{حقيقي} & \keyword{float} & \arabicfont عدد حقيقي \\
+& \arabickw{منطقي} & \keyword{bool} & \arabicfont قيمة منطقية \\
+& \arabickw{حرفي} & \keyword{char} & \arabicfont حرف واحد \\
+& \arabickw{خيط\_رمزي} & \keyword{string} & \arabicfont نص \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont التحكم & \arabickw{اذا / فان / والا} & \keyword{if / then / else} & \arabicfont الشرط \\
+& \arabickw{طالما / استمر} & \keyword{while / do} & \arabicfont حلقة شرط مسبق \\
+& \arabickw{اعد / حتى} & \keyword{repeat / until} & \arabicfont حلقة شرط لاحق \\
+& \arabickw{كرر / الى / اضف} & \keyword{for / to / step} & \arabicfont حلقة عدّاد \\
+\hline
+\arabicfont الإدخال/الإخراج & \arabickw{اقرا / اقرأ / اقرء} & \keyword{read} & \arabicfont قراءة من المستخدم \\
+& \arabickw{اطبع} & \keyword{print} & \arabicfont طباعة على الشاشة \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont القيم المنطقية & \arabickw{صح / خطأ} & \keyword{true / false} & \arabicfont القيم البوليانية \\
+\hline
+\end{tabular}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{المرحلة الأولى: التحليل المعجمي (Lexical Analysis)}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{وظيفة المحلل المعجمي}
+
+المحلل المعجمي (Lexer / Scanner) هو المرحلة الأولى في خط أنابيب المترجم. وظيفته تحويل سلسلة الأحرف الخام (Raw Characters) إلى تدفق من الرموز المميزة (Tokens)، كل رمز يحمل: نوعه، قيمته، ورقم السطر الذي وُجد فيه (Aho et al., 2007).
+
+\subsection{نموذج البيانات: الرمز المعجمي (Token)}
+
+\begin{CodeBox}[title={\filename{Token.cs} — نموذج الرمز المعجمي}]
+\begin{lstlisting}[style=CSharpStyle]
+// نموذج الرمز المعجمي للمترجم العربي
+public record Token(string Value, TokenType Type, int Line);
+
+public enum TokenType
+{
+    Keyword,      // كلمة محجوزة: برنامج، متغير، اذا ...
+    Identifier,   // معرّف مستخدم: س، المجموع ...
+    Number,       // رقم: 10، 3.14، ٥ (عربي)
+    String,       // نص: "مرحبا"
+    Char,         // حرف: 'أ'
+    Operator,     // معامل: +، -، ==، !=
+    Symbol,       // رمز: ؛، :، {، }
+    EndOfFile     // نهاية الملف
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\subsection{خوارزمية التحليل المعجمي}
+
+\begin{CodeBox}[title={\filename{Lexer.cs} — دورة التحليل الرئيسية}]
+\begin{lstlisting}[style=CSharpStyle]
+public List<Token> Tokenize()
+{
+    var tokens = new List<Token>();
+
+    while (_index < _length)
+    {
+        char c = _source[_index];
+
+        // 1. تخطي المسافات البيضاء وتتبع الأسطر
+        if (char.IsWhiteSpace(c)) {
+            if (c == '\n') _currentLine++;
+            _index++; continue;
+        }
+
+        // 2. معالجة التعليقات: // و /* */
+        if (c == '/' && PeekNext() == '/') { SkipLineComment(); continue; }
+        if (c == '/' && PeekNext() == '*') { SkipBlockComment(); continue; }
+
+        // 3. السلاسل النصية (يدعم " و " و ")
+        if (c == '"' || c == '\u201C' || c == '\u201D') {
+            tokens.Add(ReadString(c)); continue;
+        }
+
+        // 4. الأرقام (0-9 والأرقام العربية ٠-٩)
+        if (IsDigitChar(c)) { tokens.Add(ReadNumber()); continue; }
+
+        // 5. المعرفات والكلمات المحجوزة
+        if (IsIdentifierStart(c)) { tokens.Add(ReadIdentifierOrKeyword()); continue; }
+
+        // 6. المعاملات المزدوجة: ==, !=, <=, >=, &&, ||
+        string twoChar = _source.Substring(_index, 2);
+        if (twoChar is "==" or "!=" or "<=" or ">=" or "&&" or "||") {
+            tokens.Add(new Token(twoChar, TokenType.Operator, _currentLine));
+            _index += 2; continue;
+        }
+        // ... باقي المعاملات
+    }
+
+    tokens.Add(new Token("EOF", TokenType.EndOfFile, _currentLine));
+    return tokens;
+}
+
+// دعم الأرقام العربية (٠-٩) Unicode: U+0660..U+0669
+private static bool IsDigitChar(char c) =>
+    (c >= '0' && c <= '9') || (c >= '\u0660' && c <= '\u0669');
+
+// تطبيع الأرقام العربية إلى ASCII
+private static char NormalizeDigit(char c) =>
+    (c >= '\u0660' && c <= '\u0669') ? (char)('0' + (c - '\u0660')) : c;
+\end{lstlisting}
+\end{CodeBox}
+
+\section{تحليل أداء المحلل المعجمي}
+
+\begin{table}[H]
+\caption{\arabicfont خصائص المحلل المعجمي ومعالجة الحالات الخاصة}
+\label{tab:lexer-features}
+\centering
+\begin{tabularx}{\textwidth}{|c|X|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont الميزة} & \textbf{\arabicfont التفاصيل} & \textbf{\arabicfont الحالة} \\
+\hline
+\arabicfont ترميز النص & \arabicfont UTF-8 كامل مع دعم Unicode العربي & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont الأرقام العربية & \arabicfont دعم وتطبيع ٠١٢٣٤٥٦٧٨٩ & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\arabicfont الهمزات المتعددة & \arabicfont \texttt{اقرا / اقرأ / اقرء} تُعامَل متكافئةً & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont تنصيص مزدوج & \arabicfont \texttt{"..."} و \texttt{"..."} (عربي وإنجليزي) & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\arabicfont تعليقات سطرية & \arabicfont \texttt{// تعليق} & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont تعليقات متعددة & \arabicfont \texttt{/* تعليق طويل */} & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\arabicfont الفاصلة العربية & \arabicfont \texttt{؛} و \texttt{;} كلاهما مقبول & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont تتبع الأسطر & \arabicfont رقم السطر في كل رمز & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\arabicfont الأرقام العشرية & \arabicfont \texttt{3.14}، \texttt{0.25} & \textcolor{SuccessGreen}{\textbf{✓}} \\
+\hline
+\end{tabularx}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{المرحلة الثانية: التحليل النحوي وبناء شجرة الإعراب}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{منهجية التحليل النحوي}
+
+يعتمد المحلل النحوي خوارزمية \textbf{النزول العودي LL(1)} (Recursive Descent Parsing) وهي الطريقة الأمثل للغات القابلة للتحليل المباشر، إذ تُترجم كل قاعدة نحوية إلى دالة مستقلة (Cooper \& Torczon, 2012). يتضمن المحلل أيضًا آلية \textbf{التعافي من الأخطاء بالذعر} (Panic Mode Recovery).
+
+\section{نموذج عقدة شجرة الإعراب (AST Node)}
+
+\begin{CodeBox}[title={\filename{Node.cs} — عقدة شجرة الإعراب المجردة}]
+\begin{lstlisting}[style=CSharpStyle]
+public class Node
+{
+    public string Value    { get; set; }  // نوع العقدة (IfStatement, Assign, ...)
+    public string Name     { get; set; }  // اسم المعرّف المرتبط بالعقدة
+    public string DataType { get; set; }  // نوع البيانات المصرَّح
+    public string Val      { get; set; }  // القيمة النصية أو الثابتة
+    public int    Line     { get; set; }  // رقم السطر في الكود المصدري
+    public List<Node> Children { get; }   // العقد الفرعية (الأبناء)
+
+    public void AddChild(Node child) => Children.Add(child);
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{إعراب القاعدة الرئيسية للبرنامج}
+
+\begin{CodeBox}[title={\filename{Parser.cs} — إعراب الكتلة البرمجية الرئيسية}]
+\begin{lstlisting}[style=CSharpStyle]
+/// القاعدة: <برنامج> ::= "برنامج" <معرف> "؛" <كتلة> "."
+public Node ParseProgram()
+{
+    int line = Current.Line;
+    Expect("برنامج", "يجب أن يبدأ البرنامج بالكلمة المحجوزة 'برنامج'");
+    var progName = ExpectType(TokenType.Identifier,
+                              "يجب تحديد اسم للبرنامج بعد كلمة 'برنامج'");
+    Expect("؛", "يجب وضع فاصلة منقوطة '؛' بعد اسم البرنامج");
+
+    var root = new Node("ProgramRoot", progName.Value, line);
+    root.AddChild(ParseBlock());  // إعراب الكتلة البرمجية
+
+    // يجب أن ينتهي البرنامج بنقطة "."
+    if (!Match("."))
+        Errors.Add($"خطأ نحوي في السطر {Current.Line}: يجب أن ينتهي البرنامج بنقطة '.'");
+
+    return root;
+}
+
+/// آلية التعافي من الأخطاء (Panic Mode Recovery)
+public void Synchronize()
+{
+    // التقدم حتى رمز إعادة التزامن (؛ أو بداية تعليمة جديدة)
+    while (Current.Type != TokenType.EndOfFile
+           && Current.Value != "}" && Current.Value != ".")
+    {
+        if (Current.Value == "؛") { Advance(); return; }
+        if (Current.Value is "اذا" or "طالما" or "اعد" or "كرر"
+                          or "اطبع" or "اقرا" or "متغير" or "ثابت")
+            return;
+        Advance();
+    }
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{إعراب الجمل الشرطية والحلقات}
+
+\begin{CodeBox}[title={\filename{Parser.cs} — إعراب الجملة الشرطية \texttt{اذا...فان...والا}}]
+\begin{lstlisting}[style=CSharpStyle]
+/// القاعدة: <اذا> ::= "اذا" "(" <تعبير> ")" "فان" <جملة> ["والا" <جملة>] "؛"
+private Node ParseIfStatement()
+{
+    int line = Current.Line;
+    Advance();  // تخطي "اذا"
+
+    Expect("(", "يجب فتح قوس '(' بعد 'اذا'");
+    var condition = ParseExpression();
+    Expect(")", "يجب إغلاق القوس ')' للشرط");
+    Expect("فان", "يجب كتابة 'فان' بعد الشرط");
+
+    var ifNode = new Node("IfStatement", line);
+    ifNode.AddChild(condition);
+    ifNode.AddChild(ParseStatement());  // كتلة "إذا صحيح"
+
+    if (Match("والا"))                  // كتلة "إذا خاطئ" (اختيارية)
+        ifNode.AddChild(ParseStatement());
+
+    Expect("؛", "يجب إنهاء جملة 'اذا' بفاصلة منقوطة");
+    return ifNode;
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{مثال على شجرة الإعراب}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    level distance=1.1cm,
+    sibling distance=3.5cm,
+    every node/.style={draw=SecondaryBlue, rounded corners=3pt,
+                       fill=LightBg, font=\small, align=center,
+                       minimum height=0.65cm, minimum width=1.5cm},
+    edge from parent/.style={draw=gray, -Latex}
+]
+\node {\texttt{ProgramRoot}\\\tiny\arabicfont حساب}
+  child { node {\texttt{ConstDecl}\\\tiny\arabicfont الحد=100} }
+  child { node {\texttt{Block}}
+    child { node {\texttt{Assign}\\\tiny س = 20} }
+    child { node {\texttt{IfStatement}}
+      child { node {\texttt{BinaryExpr}\\\tiny \texttt{>}} 
+        child { node {\texttt{Variable}\\\tiny\arabicfont س} }
+        child { node {\texttt{Number}\\\tiny\texttt{50}} }
+      }
+      child { node {\texttt{PrintStmt}\\\tiny\arabicfont اطبع} }
+    }
+  };
+\end{tikzpicture}
+\caption{\arabicfont مثال مُبسَّط لشجرة الإعراب المجردة (AST) لبرنامج عربي}
+\label{fig:ast}
+\end{figure}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{المرحلة الثالثة: التحليل الدلالي وجدول الرموز}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{جدول الرموز (Symbol Table)}
+
+جدول الرموز هو المستودع المركزي الذي يحفظ معلومات جميع المعرِّفات في البرنامج. يُبنى أثناء التحليل الدلالي ويُستخدم في مرحلة توليد الكود (Grune \& Jacobs, 2008).
+
+\begin{CodeBox}[title={\filename{SymbolTable.cs} — هيكل جدول الرموز}]
+\begin{lstlisting}[style=CSharpStyle]
+public class SymbolInfo
+{
+    public string Name          { get; set; }  // اسم الرمز
+    public string DataType      { get; set; }  // صحيح، حقيقي، منطقي ...
+    public string Kind          { get; set; }  // متغير، ثابت، اجراء، نوع
+    public string Value         { get; set; }  // القيمة الأولية (للثوابت)
+    public int    DeclaredLine  { get; set; }  // سطر التعريف
+    public List<int> ReferencedLines { get; }  // أسطر الاستخدام
+}
+
+public class SymbolTable
+{
+    // جدول تجزئة سريع بزمن O(1) للبحث والإضافة
+    private readonly Dictionary<string, SymbolInfo> _symbols =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public bool Add(string name, string type, string kind, int line, string val = "")
+    {
+        if (_symbols.ContainsKey(name)) return false;  // إعادة تعريف — خطأ
+        _symbols[name] = new SymbolInfo(name, type, kind, line, val);
+        return true;
+    }
+
+    public SymbolInfo? Lookup(string name) =>
+        _symbols.TryGetValue(name, out var s) ? s : null;
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{محرك التحليل الدلالي}
+
+\begin{CodeBox}[title={\filename{SemanticAnalyzer.cs} — فحص الاستخدام والإسناد}]
+\begin{lstlisting}[style=CSharpStyle]
+private void ValidateAssignment(Node assignNode)
+{
+    string varName = assignNode.Name;
+    int    line    = assignNode.Line;
+
+    var sym = _symbolTable.Lookup(varName);
+
+    // خطأ 1: محاولة الإسناد إلى متغير غير مُعرَّف
+    if (sym == null) {
+        _errors.Add($"[دلالي: {line}] المتغير '{varName}' غير مُعرَّف");
+        return;
+    }
+
+    // خطأ 2: محاولة تعديل ثابت
+    if (sym.Kind == "ثابت") {
+        _errors.Add($"[دلالي: {line}] لا يمكن تغيير قيمة الثابت '{varName}'");
+        return;
+    }
+
+    // خطأ 3: محاولة القراءة إلى ثابت
+    if (sym.Kind == "ثابت" && assignNode.Value == "ReadStatement") {
+        _errors.Add($"[دلالي: {line}] لا يمكن القراءة إلى ثابت '{varName}'");
+    }
+
+    // تسجيل سطر الاستخدام في جدول الرموز
+    _symbolTable.AddReference(varName, line);
+}
+
+// تحذير القسمة على صفر للثوابت
+private void ValidateBinaryExpression(Node binNode)
+{
+    if (binNode.Val is "/" or "\\" or "%")
+    {
+        var rhs = binNode.Children.Count > 1 ? binNode.Children[1] : null;
+        if (rhs?.Value == "Number" && rhs.Val == "0")
+            _errors.Add($"[تحذير: {binNode.Line}] محاولة القسمة على صفر");
+    }
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{مثال لمخرجات جدول الرموز}
+
+\begin{table}[H]
+\caption{\arabicfont مثال على محتوى جدول الرموز لبرنامج اختباري}
+\label{tab:symtable-example}
+\centering
+\small
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont الاسم} & \textbf{\arabicfont النوع} & \textbf{\arabicfont التصنيف} & \textbf{\arabicfont القيمة} & \textbf{\arabicfont سطر التعريف} & \textbf{\arabicfont أسطر الاستخدام} \\
+\hline
+\arabicfont حساب & \arabicfont اسم\_برنامج & \arabicfont اسم\_برنامج & — & 1 & — \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont الحد\_الاقصى & \arabicfont صحيح & \arabicfont ثابت & 100 & 4 & 19 \\
+\hline
+\arabicfont س & \arabicfont صحيح & \arabicfont متغير & — & 7 & 12, 16 \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont ص & \arabicfont صحيح & \arabicfont متغير & — & 7 & 13, 16 \\
+\hline
+\arabicfont مجموع & \arabicfont صحيح & \arabicfont متغير & — & 7 & 14, 17 \\
+\hline
+\end{tabular}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{المرحلة الرابعة: توليد الكود الوسيط (TAC)}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{الكود الوسيط ثلاثي العناوين}
+
+الكود الوسيط (Three-Address Code — TAC) هو تمثيل خطي مستقل عن المعالج، يُعبِّر عن كل عملية بثلاثة عناصر: نتيجة، معامل أول، ومعامل ثانٍ. يُمثِّل حلقة الوصل بين شجرة الإعراب وكود التجميع النهائي (Aho et al., 2007).
+
+\section{توليد TAC للتراكيب الرئيسية}
+
+\begin{CodeBox}[title={\filename{ICG.cs} — توليد TAC للجملة الشرطية}]
+\begin{lstlisting}[style=CSharpStyle]
+private void GenerateIf(Node ifNode)
+{
+    string trueLabel  = NewLabel();  // L1 — كتلة صح
+    string falseLabel = NewLabel();  // L2 — كتلة خطأ
+    string endLabel   = NewLabel();  // L3 — نهاية الجملة
+
+    var condNode = ifNode.Children[0];
+    var thenNode = ifNode.Children[1];
+    Node? elseNode = ifNode.Children.Count > 2 ? ifNode.Children[2] : null;
+
+    // توليد قفزة شرطية
+    GenerateCondition(condNode, trueLabel, falseLabel);
+
+    _instructions.Add($"{trueLabel}:");   // L1:
+    GenerateNode(thenNode);               // كتلة "فان"
+
+    if (elseNode != null)
+    {
+        _instructions.Add($"goto {endLabel}");  // goto L3
+        _instructions.Add($"{falseLabel}:");    // L2:
+        GenerateNode(elseNode);                 // كتلة "والا"
+        _instructions.Add($"{endLabel}:");      // L3:
+    }
+    else
+    {
+        _instructions.Add($"{falseLabel}:");    // L2: (بدون والا)
+    }
+}
+
+// توليد TAC لحلقة طالما
+private void GenerateWhile(Node whileNode)
+{
+    string startLabel = NewLabel();  // L1 — بداية الحلقة
+    string bodyLabel  = NewLabel();  // L2 — جسم الحلقة
+    string endLabel   = NewLabel();  // L3 — نهاية الحلقة
+
+    _instructions.Add($"{startLabel}:");              // L1:
+    GenerateCondition(whileNode.Children[0], bodyLabel, endLabel);
+    _instructions.Add($"{bodyLabel}:");               // L2:
+    GenerateNode(whileNode.Children[1]);              // الجسم
+    _instructions.Add($"goto {startLabel}");          // goto L1
+    _instructions.Add($"{endLabel}:");                // L3:
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{مثال كامل على مخرجات TAC}
+
+\begin{table}[H]
+\caption{\arabicfont مثال: توليد TAC لبرنامج حساب مجموع الأرقام}
+\label{tab:tac-example}
+\centering
+\begin{tabular}{|c|l|l|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont السطر} & \textbf{\arabicfont تعليمة TAC} & \textbf{\arabicfont الوظيفة} \\
+\hline
+1  & \texttt{// بداية البرنامج: مجموع\_الاعداد} & \arabicfont تعليق بداية \\
+\hline
+\rowcolor{TableAlt}
+2  & \texttt{مجموع = 0}                     & \arabicfont إسناد الصفر \\
+\hline
+3  & \texttt{العداد = 1}                     & \arabicfont تهيئة العداد \\
+\hline
+\rowcolor{TableAlt}
+4  & \texttt{L1:}                            & \arabicfont بداية حلقة كرر \\
+\hline
+5  & \texttt{t1 = العداد <= 10}              & \arabicfont فحص شرط الحلقة \\
+\hline
+\rowcolor{TableAlt}
+6  & \texttt{if t1 goto L2}                  & \arabicfont قفز إلى الجسم \\
+\hline
+7  & \texttt{goto L3}                        & \arabicfont خروج من الحلقة \\
+\hline
+\rowcolor{TableAlt}
+8  & \texttt{L2:}                            & \arabicfont جسم الحلقة \\
+\hline
+9  & \texttt{t2 = مجموع + العداد}           & \arabicfont عملية الجمع \\
+\hline
+\rowcolor{TableAlt}
+10 & \texttt{مجموع = t2}                    & \arabicfont تحديث المجموع \\
+\hline
+11 & \texttt{t3 = العداد + 1}               & \arabicfont زيادة العداد \\
+\hline
+\rowcolor{TableAlt}
+12 & \texttt{العداد = t3}                   & \arabicfont تحديث العداد \\
+\hline
+13 & \texttt{goto L1}                        & \arabicfont عودة للبداية \\
+\hline
+\rowcolor{TableAlt}
+14 & \texttt{L3:}                            & \arabicfont نهاية الحلقة \\
+\hline
+15 & \texttt{print مجموع}                   & \arabicfont طباعة النتيجة \\
+\hline
+\end{tabular}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{المرحلتان الخامسة والسادسة: التنفيذ وتوليد كود التجميع}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{المفسر الافتراضي (TAC Virtual Machine)}
+
+المفسر الافتراضي ينفِّذ تعليمات TAC مباشرة في الذاكرة دون الحاجة إلى مرحلة التجميع. يُحاكي عمل المعالج الفعلي مستخدمًا جدول تجزئة للمتغيرات ومؤشر للتعليمة الحالية (Program Counter).
+
+\begin{CodeBox}[title={\filename{CompilerRunner.cs} — تسلسل تشغيل المراحل الست}]
+\begin{lstlisting}[style=CSharpStyle]
+public static CompilationResult Compile(string sourceCode,
+                                        bool verbose = true,
+                                        string userInput = "")
+{
+    var result = new CompilationResult { SourceCode = sourceCode };
+
+    // === المرحلة 1: التحليل المعجمي ===
+    var lexer  = new Lexer(sourceCode);
+    var tokens = lexer.Tokenize();
+    result.Tokens = tokens.Select(t => new TokenDto(t)).ToList();
+
+    // === المرحلة 2: التحليل النحوي ===
+    var parser  = new Parser(tokens);
+    var astRoot = parser.ParseProgram();
+    result.ParseErrors.AddRange(parser.Errors);
+
+    if (astRoot == null) return result;
+
+    // === المرحلة 3: التحليل الدلالي ===
+    var symTable  = new SymbolTable();
+    var semantic  = new SemanticAnalyzer(symTable);
+    semantic.Analyze(astRoot);
+    result.SemanticErrors.AddRange(semantic.Errors);
+
+    // === المرحلة 4: توليد الكود الوسيط TAC ===
+    var icg = new IntermediateCodeGenerator();
+    var tac = icg.Generate(astRoot);
+    result.TAC = tac;
+
+    // === المرحلة 5: تنفيذ TAC (مفسر افتراضي) ===
+    // يُنفَّذ ضمن AssemblyCodeGenerator مع إدارة stdin
+
+    // === المرحلة 6: توليد كود التجميع ===
+    var asmGen  = new AssemblyCodeGenerator(symTable);
+    result.Assembly = asmGen.Generate(astRoot, tac);
+
+    return result;
+}
+\end{lstlisting}
+\end{CodeBox}
+
+\section{توليد كود التجميع x86-64}
+
+المرحلة السادسة تُولِّد كود تجميع x86-64 بنمط MASM قابلاً للتنفيذ المباشر، مُستخدِمةً نموذج إدارة المتغيرات عبر قسم \texttt{.data} وعمليات مكدس تقليدية (Irvine, 2014).
+
+\begin{CodeBox}[title={\small مثال على مخرجات كود التجميع x86 — برنامج الحساب}]
+\begin{lstlisting}[style=TACStyle]
+; =========================================
+; Generated Assembly for: حساب_المستطيل
+; Compiler: Arabic Language Compiler v2.0
+; =========================================
+.686
+.model flat, stdcall
+.stack 4096
+
+.data
+    الطول  DWORD 0
+    العرض  DWORD 0
+    المساحة DWORD 0
+    msg1   BYTE "مساحة المستطيل تساوي: ", 0
+
+.code
+main PROC
+    ; الطول = 15
+    MOV EAX, 15
+    MOV الطول, EAX
+
+    ; العرض = 10
+    MOV EAX, 10
+    MOV العرض, EAX
+
+    ; المساحة = الطول * العرض
+    MOV EAX, الطول
+    IMUL EAX, العرض
+    MOV المساحة, EAX
+
+    ; اطبع ("مساحة المستطيل:", المساحة)
+    PUSH OFFSET msg1
+    CALL printf
+    PUSH المساحة
+    CALL print_int
+
+    RET
+main ENDP
+END main
+\end{lstlisting}
+\end{CodeBox}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{محرر الأكواد وبيئة التطوير المتكاملة (IDE)}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{نظرة عامة على المحرر}
+
+محرر الأكواد هو تطبيق \textbf{Windows Forms} مكتوب بـ C\# / .NET 9، يوفر بيئة تطوير متكاملة (IDE) تفاعلية تدعم الكتابة من اليمين إلى اليسار (RTL) وتعرض مخرجات المترجم في الوقت الفعلي.
+
+\section{مكونات الواجهة الرئيسية}
+
+\begin{table}[H]
+\caption{\arabicfont التبويبات الثمانية في بيئة التطوير المتكاملة}
+\label{tab:ide-tabs}
+\centering
+\begin{tabularx}{\textwidth}{|c|c|X|}
+\hline
+\rowcolor{TableHead}
+\textbf{\#} & \textbf{\arabicfont التبويب} & \textbf{\arabicfont المحتوى} \\
+\hline
+1 & \arabicfont الرموز المعجمية & \arabicfont جدول (DataGridView) يعرض كل Token: القيمة، النوع، السطر \\
+\hline
+\rowcolor{TableAlt}
+2 & \arabicfont شجرة الإعراب & \arabicfont TreeView هرمي لعقد AST قابل للتوسيع والطي \\
+\hline
+3 & \arabicfont جدول الرموز & \arabicfont جدول كامل للمتغيرات والثوابت مع أسطر التعريف والاستخدام \\
+\hline
+\rowcolor{TableAlt}
+4 & \arabicfont الكود الوسيط & \arabicfont نص تعليمات TAC بترقيم الأسطر \\
+\hline
+5 & \arabicfont كود التجميع & \arabicfont كود x86 Assembly بالكامل \\
+\hline
+\rowcolor{TableAlt}
+6 & \arabicfont مخرجات التنفيذ & \arabicfont نتائج تشغيل البرنامج (Console Output) \\
+\hline
+7 & \arabicfont قائمة الأخطاء & \arabicfont جدول أخطاء برأسين: السطر، النوع، التفاصيل \\
+\hline
+\rowcolor{TableAlt}
+8 & \arabicfont الأمثلة & \arabicfont متصفح مدمج لتحميل الأمثلة بنقرة واحدة \\
+\hline
+\end{tabularx}
+\end{table}
+
+\section{لقطات شاشة من بيئة التطوير}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen01_ide_console.png}
+    \caption{\arabicfont الواجهة الرئيسية لبيئة التطوير المتكاملة مع مخرجات تنفيذ برنامج عربي}
+    \label{fig:ide-main}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen03_tokens_grid.png}
+    \caption{\arabicfont جدول الرموز المعجمية (Tokens) المُستخرجة من المحلل المعجمي}
+    \label{fig:tokens-grid}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen04_ast_tree.png}
+    \caption{\arabicfont شجرة الإعراب المجردة (AST) المبنية من المحلل النحوي}
+    \label{fig:ast-screen}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen05_symbol_table.png}
+    \caption{\arabicfont جدول الرموز مع تتبع أسطر التعريف والاستخدام}
+    \label{fig:symtable-screen}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen06_tac_code.png}
+    \caption{\arabicfont الكود الوسيط ثلاثي العناوين (TAC) المُولَّد من المترجم}
+    \label{fig:tac-screen}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imgs/real_screen08_error_list.png}
+    \caption{\arabicfont قائمة الأخطاء التفاعلية مع إمكانية الانتقال المباشر لموضع الخطأ}
+    \label{fig:errors-screen}
+\end{figure}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{الأمثلة الاختبارية الشاملة}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{منهجية الاختبار}
+
+اعتمد المشروع نهج الصندوق الأبيض (White-Box Testing) مع حالات اختبار إيجابية (Positive Cases) لإثبات الصحة، وحالات سلبية (Negative Cases) لإثبات متانة اكتشاف الأخطاء.
+
+\section{الأمثلة الاختبارية}
+
+\subsection{المثال 1: المتغيرات والعمليات الحسابية}
+
+\begin{CodeBox}[title={المثال 1 — \filename{01\_طباعة\_ومتغيرات.arb}}]
+\begin{lstlisting}[style=ArabicCodeStyle]
+برنامج حساب_المتغيرات_والعمليات ؛
+
+/* أسبقية المعاملات: الضرب والقسمة قبل الجمع والطرح */
+ثابت
+    الحد_الادنى = 10 ؛
+    النسبة_المئوية = 0.25 ؛
+
+متغير
+    العدد_الاول , العدد_الثاني , الناتج : صحيح ؛
+
+{
+    العدد_الاول = 100 ؛
+    العدد_الثاني = 20 ؛
+    الناتج = العدد_الاول + العدد_الثاني * 2 - 10 \ 2 ؛
+    اطبع ( "ناتج المعادلة = " , الناتج ) ؛
+} .
+\end{lstlisting}
+\end{CodeBox}
+\textbf{\arabicfont الهدف:} أسبقية المعاملات. \quad \textbf{\arabicfont المتوقع:} \texttt{ناتج المعادلة = 135}
+
+\subsection{المثال 3: الجمل الشرطية المتداخلة}
+
+\begin{CodeBox}[title={المثال 3 — \filename{03\_الجمل\_الشرطية.arb}}]
+\begin{lstlisting}[style=ArabicCodeStyle]
+برنامج فحص_الدرجات ؛
+متغير
+    الدرجة : صحيح ؛
+{
+    الدرجة = 85 ؛
+    اذا ( الدرجة >= 90 ) فان {
+        اطبع ( "التقدير: ممتاز" ) ؛
+    } والا {
+        اذا ( الدرجة >= 75 ) فان {
+            اطبع ( "التقدير: جيد جداً" ) ؛
+        } والا {
+            اطبع ( "التقدير: مقبول" ) ؛
+        } ؛
+    } ؛
+} .
+\end{lstlisting}
+\end{CodeBox}
+\textbf{\arabicfont الهدف:} الشروط المتداخلة. \quad \textbf{\arabicfont المتوقع:} \texttt{التقدير: جيد جداً}
+
+\subsection{المثال 4: حلقة العداد (كرر)}
+
+\begin{CodeBox}[title={المثال 4 — \filename{04\_حلقة\_العداد\_كرر.arb}}]
+\begin{lstlisting}[style=ArabicCodeStyle]
+برنامج مجموع_الاعداد ؛
+متغير
+    العداد , المجموع : صحيح ؛
+{
+    المجموع = 0 ؛
+    كرر ( العداد = 1 الى 10 اضف 1 ) {
+        المجموع = المجموع + العداد ؛
+    } ؛
+    اطبع ( "مجموع الأرقام 1 إلى 10 = " , المجموع ) ؛
+} .
+\end{lstlisting}
+\end{CodeBox}
+\textbf{\arabicfont الهدف:} حلقة عداد. \quad \textbf{\arabicfont المتوقع:} \texttt{مجموع الأرقام 1 إلى 10 = 55}
+
+\subsection{المثال 9: اكتشاف الأخطاء النحوية (سالب)}
+
+\begin{CodeBox}[title={المثال 9 — \filename{09\_اختبار\_الاخطاء\_النحوية.arb}}]
+\begin{lstlisting}[style=ArabicCodeStyle]
+برنامج خطأ_نحوي ؛
+متغير
+    س , ص : صحيح ؛
+{
+    س = 10          // خطأ: مفقودة الفاصلة ؛
+    ص = س + * 5 ؛   // خطأ: معاملان متتاليان
+    اذا ( س > 5 ) { // خطأ: مفقودة كلمة "فان"
+        اطبع(س) ؛
+    } ؛
+} .
+\end{lstlisting}
+\end{CodeBox}
+\textbf{\arabicfont الهدف:} اختبار Panic Mode Recovery. \quad \textbf{\arabicfont المتوقع:} 3 أخطاء نحوية مع الاستمرار في التحليل.
+
+\subsection{المثال 10: اكتشاف الأخطاء الدلالية (سالب)}
+
+\begin{CodeBox}[title={المثال 10 — \filename{10\_اختبار\_الاخطاء\_الدلالية.arb}}]
+\begin{lstlisting}[style=ArabicCodeStyle]
+برنامج خطأ_دلالي ؛
+ثابت
+    الحد_الثابت = 50 ؛
+متغير
+    س : صحيح ؛
+{
+    س = 20 ؛
+    الحد_الثابت = 100 ؛   // خطأ: تعديل ثابت
+    غير_معرف = س + 5 ؛    // خطأ: متغير غير مُعرَّف
+    اقرا ( الحد_الثابت ) ؛ // خطأ: قراءة إلى ثابت
+} .
+\end{lstlisting}
+\end{CodeBox}
+\textbf{\arabicfont الهدف:} اكتشاف 3 أخطاء دلالية. \quad \textbf{\arabicfont المتوقع:} 3 رسائل خطأ دلالية دقيقة.
+
+\section{ملخص نتائج الاختبارات}
+
+\begin{table}[H]
+\caption{\arabicfont ملخص حالات الاختبار ونتائجها}
+\label{tab:test-results}
+\centering
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\#} & \textbf{\arabicfont اسم الاختبار} & \textbf{\arabicfont النوع} & \textbf{\arabicfont النتيجة المتوقعة} & \textbf{\arabicfont الحالة} \\
+\hline
+1 & \arabicfont متغيرات وعمليات & \arabicfont إيجابي & \arabicfont ترجمة صحيحة & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\rowcolor{TableAlt}
+2 & \arabicfont أسبقية المعاملات & \arabicfont إيجابي & \arabicfont نتيجة صحيحة & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+3 & \arabicfont شروط متداخلة & \arabicfont إيجابي & \arabicfont تفريع صحيح & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\rowcolor{TableAlt}
+4 & \arabicfont حلقة كرر & \arabicfont إيجابي & \arabicfont مجموع = 55 & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+5 & \arabicfont حلقة طالما & \arabicfont إيجابي & \arabicfont تنفيذ صحيح & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\rowcolor{TableAlt}
+6 & \arabicfont حلقة اعد...حتى & \arabicfont إيجابي & \arabicfont تنفيذ صحيح & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+7 & \arabicfont تعليمة اقرا & \arabicfont إيجابي & \arabicfont قراءة المستخدم & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\rowcolor{TableAlt}
+8 & \arabicfont برنامج شامل & \arabicfont إيجابي & \arabicfont تكامل كامل & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+9 & \arabicfont أخطاء نحوية & \arabicfont سالب & \arabicfont كشف الأخطاء & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\rowcolor{TableAlt}
+10 & \arabicfont أخطاء دلالية & \arabicfont سالب & \arabicfont كشف الأخطاء & \textcolor{SuccessGreen}{\textbf{✓ نجح}} \\
+\hline
+\multicolumn{4}{|r|}{\textbf{\arabicfont معدل النجاح}} & \textcolor{SuccessGreen}{\textbf{100\%}} \\
+\hline
+\end{tabular}
+\end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{الأدوات والتقنيات المستخدمة}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{بيئات التطوير ولغات البرمجة}
+
+\begin{table}[H]
+\caption{\arabicfont لغات البرمجة والأدوات والمكتبات المعتمدة}
+\label{tab:tools}
+\centering
+\begin{tabularx}{\textwidth}{|c|c|X|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont الأداة / المكتبة} & \textbf{\arabicfont الإصدار} & \textbf{\arabicfont الغرض} & \textbf{\arabicfont المكوِّن} \\
+\hline
+\textbf{ISO C++20} & C++20 & \arabicfont لغة بناء نواة المترجم الأساسي & \arabicfont المترجم الأصلي \\
+\hline
+\rowcolor{TableAlt}
+MSVC & v19.4x & \arabicfont تجميع C++ إلى ملف .exe & \arabicfont المترجم الأصلي \\
+\hline
+\textbf{C\# 13 / .NET 9} & .NET 9.0 & \arabicfont لغة المترجم الثانوي والمحرر & \arabicfont المترجم + IDE \\
+\hline
+\rowcolor{TableAlt}
+Windows Forms & .NET 9 & \arabicfont بناء واجهة IDE الرسومية RTL & \arabicfont IDE \\
+\hline
+STL C++20 & C++20 & \arabicfont هياكل البيانات والخوارزميات & \arabicfont المترجم الأصلي \\
+\hline
+\rowcolor{TableAlt}
+\texttt{System.Text.Json} & .NET 9 & \arabicfont تسلسل نتائج الترجمة بصيغة JSON & \arabicfont IDE + C\# \\
+\hline
+\texttt{System.Diagnostics} & .NET 9 & \arabicfont استدعاء مترجم C++ كعملية IPC & \arabicfont IDE \\
+\hline
+\rowcolor{TableAlt}
+CMake & v3.26 & \arabicfont نظام بناء مستقل لمترجم C++ & \arabicfont المترجم الأصلي \\
+\hline
+Inno Setup & v6.3 & \arabicfont حزمة التثبيت النهائية (.exe) & \arabicfont التسليم \\
+\hline
+\end{tabularx}
+\end{table}
+
+\section{متطلبات التشغيل}
+
+\begin{table}[H]
+\caption{\arabicfont متطلبات النظام لتشغيل المشروع}
+\label{tab:requirements}
+\centering
+\begin{tabular}{|c|l|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont المتطلب} & \textbf{\arabicfont التفاصيل} \\
+\hline
+\arabicfont نظام التشغيل & Windows 10 (64-bit) أو أحدث \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont مترجم C++ & MSVC v19+ أو MinGW-w64 (C++20 support) \\
+\hline
+\arabicfont إطار .NET & .NET 9.0 SDK أو .NET 8.0 \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont ذاكرة RAM & 512 MB كحد أدنى \\
+\hline
+\arabicfont مساحة القرص & 50 MB (المشروع المُجمَّع) \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont نظام الترميز & UTF-8 (مُعدَّل تلقائيًا من البرنامج) \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{تعليمات البناء والتشغيل}
+
+\subsection{بناء مترجم C++}
+\begin{CodeBox}[]
+\begin{lstlisting}[basicstyle=\ttfamily\small]
+cd CompilerProject_CPP
+.\build.bat
+.\CompilerProject_CPP.exe ..\Examples\01_طباعة_ومتغيرات.arb
+# تشغيل الاختبارات الشاملة:
+.\CompilerProject_CPP.exe --test
+\end{lstlisting}
+\end{CodeBox}
+
+\subsection{بناء المترجم الثانوي C\#}
+\begin{CodeBox}[]
+\begin{lstlisting}[basicstyle=\ttfamily\small]
+cd CompilerProject
+dotnet build -c Release
+dotnet run -- ..\Examples\01_طباعة_ومتغيرات.arb
+\end{lstlisting}
+\end{CodeBox}
+
+\subsection{تشغيل بيئة التطوير (IDE)}
+\begin{CodeBox}[]
+\begin{lstlisting}[basicstyle=\ttfamily\small]
+cd LanguageEditor
+dotnet run
+\end{lstlisting}
+\end{CodeBox}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter{التقييم والاستنتاجات والتوصيات}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\section{تقييم إنجازات المشروع}
+
+\begin{table}[H]
+\caption{\arabicfont التقييم الشامل لمكونات المشروع}
+\label{tab:evaluation}
+\centering
+\begin{tabular}{|c|c|c|c|}
+\hline
+\rowcolor{TableHead}
+\textbf{\arabicfont المعيار} & \textbf{\arabicfont التقييم} & \textbf{\arabicfont الدرجة} & \textbf{\arabicfont الملاحظات} \\
+\hline
+\arabicfont اكتمال المراحل الست & \arabicfont ممتاز & 10/10 & \arabicfont جميع المراحل مُطبَّقة \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont جودة المحلل المعجمي & \arabicfont ممتاز & 10/10 & \arabicfont دعم عربي كامل \\
+\hline
+\arabicfont جودة المحلل النحوي & \arabicfont ممتاز & 9/10 & \arabicfont 773 سطر + Panic Mode \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont التحليل الدلالي & \arabicfont جيد جداً & 7/10 & \arabicfont يحتاج فحص توافق الأنواع \\
+\hline
+\arabicfont توليد TAC & \arabicfont ممتاز & 9/10 & \arabicfont كامل لجميع التراكيب \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont توليد التجميع & \arabicfont جيد جداً & 8/10 & \arabicfont x86-64 + MSIL \\
+\hline
+\arabicfont واجهة IDE & \arabicfont ممتاز & 9/10 & \arabicfont 8 تبويبات تفاعلية \\
+\hline
+\rowcolor{TableAlt}
+\arabicfont الاختبارات & \arabicfont ممتاز & 10/10 & \arabicfont نسبة نجاح 100\% \\
+\hline
+\arabicfont التوثيق & \arabicfont ممتاز & 9/10 & \arabicfont APA 7 + وثائق شاملة \\
+\hline
+\multicolumn{2}{|r|}{\textbf{\arabicfont المجموع الكلي}} & \textbf{8.6/10} & \textcolor{SuccessGreen}{\textbf{\arabicfont جيد جداً}} \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{الاستنتاجات}
+
+يُمثِّل هذا المشروع تطبيقًا أكاديميًا عمليًا متكاملًا لمبادئ بناء المترجمات، ويمتاز بـ:
+
+\begin{enumerate}[label=\textbf{\arabic*.}, rightmargin=0.5cm]
+    \item \textbf{الأصالة:} تطبيق يدوي كامل (Handwritten) دون استخدام مولِّدات تلقائية (Lex/Yacc).
+    \item \textbf{ثنائية التطبيق:} وجود مترجمَين موازيَّين (C++ و C\#) هو نادر في مشاريع الطلاب ويُظهر سعةً أكاديمية واسعة.
+    \item \textbf{دعم العربية:} معالجة الترميز UTF-8 والأرقام العربية وتعدد الهمزات يُضيف تحديات تقنية حقيقية.
+    \item \textbf{التكامل:} ربط المحرر بالمترجم عبر JSON IPC هو تطبيق واقعي لمبدأ الفصل بين المكونات.
+\end{enumerate}
+
+\section{التوصيات للتطوير المستقبلي}
+
+\begin{enumerate}[label=\textbf{\arabic*.}, rightmargin=0.5cm]
+    \item \textbf{إضافة تتبع عمود الخطأ:} تعديل المحلل المعجمي لتتبع رقم العمود بجانب رقم السطر لتحسين دقة رسائل الأخطاء.
+    \item \textbf{تطوير فحص توافق الأنواع:} استكمال التحقق من توافق الأنواع في العمليات المنطقية \texttt{\&\&} و \texttt{||}.
+    \item \textbf{دعم الدوال (Functions):} إضافة دعم كامل للدوال ذات القيمة المُعادة كامتداد طبيعي للبنية الحالية.
+    \item \textbf{تحسين الكود (Optimization):} إضافة مرحلة تحسين بسيطة للكود الوسيط (Constant Folding, Dead Code Elimination).
+    \item \textbf{نظام النطاقات المتداخلة:} تطوير جدول الرموز ليدعم النطاقات المتداخلة (Scoped Symbol Table) مع حلقات ودوال.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\chapter*{المراجع والمصادر (APA 7th Edition)}
+\addcontentsline{toc}{chapter}{المراجع والمصادر}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\setlength{\leftskip}{1.5cm}
+\setlength{\parindent}{-1.5cm}
+
+Aho, A. V., Lam, M. S., Sethi, R., \& Ullman, J. D. (2007). \textit{Compilers: Principles, techniques, and tools} (2nd ed.). Addison-Wesley Longman.
+
+\vspace{0.3cm}
+
+Al-Kahsah, K. M. (2025). \textit{Arabic programming language grammar rules and compiler construction project specifications} [Course handout, CS 351]. Faculty of Computer Science and Information Technology, Ibb University.
+
+\vspace{0.3cm}
+
+Al-Kharashi, I. A., \& Evens, M. W. (1994). Comparing words, stems, and roots as index terms in an Arabic information retrieval system. \textit{Journal of the American Society for Information Science, 45}(8), 548--560. \url{https://doi.org/10.1002/(SICI)1097-4571(199409)45:8<548::AID-ASI3>3.0.CO;2-Y}
+
+\vspace{0.3cm}
+
+Al-Sharafi, A. (2026). \textit{Compiler construction laboratory guidelines and final delivery requirements} [Practical course handout]. Faculty of Computer Science and Information Technology, Ibb University.
+
+\vspace{0.3cm}
+
+Cooper, K. D., \& Torczon, L. (2012). \textit{Engineering a compiler} (2nd ed.). Morgan Kaufmann. \url{https://doi.org/10.1016/C2009-0-27084-4}
+
+\vspace{0.3cm}
+
+Grune, D., \& Jacobs, C. J. H. (2008). \textit{Parsing techniques: A practical guide} (2nd ed.). Springer. \url{https://doi.org/10.1007/978-0-387-68954-8}
+
+\vspace{0.3cm}
+
+International Organization for Standardization. (2020). \textit{Programming languages --- C++} (ISO/IEC 14882:2020). ISO. \url{https://www.iso.org/standard/79358.html}
+
+\vspace{0.3cm}
+
+Irvine, K. R. (2014). \textit{Assembly language for x86 processors} (7th ed.). Pearson.
+
+\vspace{0.3cm}
+
+Louden, K. C. (1997). \textit{Compiler construction: Principles and practice}. PWS Publishing Company.
+
+\vspace{0.3cm}
+
+Microsoft Corporation. (2024). \textit{C\# language specification, version 13.0}. Microsoft Learn. \url{https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/}
+
+\vspace{0.3cm}
+
+Scott, M. L. (2015). \textit{Programming language pragmatics} (4th ed.). Morgan Kaufmann.
+
+\vspace{0.3cm}
+
+Unicode Consortium. (2023). \textit{The Unicode standard, version 15.1.0}. \url{https://www.unicode.org/versions/Unicode15.1.0/}
+
+\setlength{\leftskip}{0cm}
+\setlength{\parindent}{0cm}
+
+\end{document}

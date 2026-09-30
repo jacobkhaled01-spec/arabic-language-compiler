@@ -24,9 +24,11 @@ namespace CompilerCPP {
     void SemanticAnalyzer::PopulateDeclarations(const std::shared_ptr<Node>& root) {
         if (!root) return;
 
+        std::string currentProc = "";
         auto traverse = [&](auto& self, const std::shared_ptr<Node>& node) -> void {
             if (!node) return;
 
+            std::string prevProc = currentProc;
             if (node->Value == "ConstDecl") {
                 if (!_symbolTable.Add(node->Name, "صحيح", "ثابت", node->Line, node->Val)) {
                     _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف الثابت '" + node->Name + "' في نفس النطاق");
@@ -41,17 +43,23 @@ namespace CompilerCPP {
                 }
             } else if (node->Value == "VarDecl") {
                 if (!_symbolTable.Add(node->Name, node->DataType, "متغير", node->Line, "-")) {
-                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف المتغير '" + node->Name + "' في نفس النطاق");
+                    if (currentProc.empty()) {
+                        _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف المتغير '" + node->Name + "' في نفس النطاق");
+                    }
                 }
             } else if (node->Value == "ProcedureDecl") {
+                currentProc = node->Name;
                 if (!_symbolTable.Add(node->Name, "اجراء", "اجراء", node->Line, "-")) {
                     _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف الإجراء '" + node->Name + "'");
                 }
+            } else if (node->Value == "ParamDecl") {
+                _symbolTable.Add(node->Name, node->DataType, "معامل_" + node->Val, node->Line, "معامل إجرائي");
             }
 
             for (const auto& child : node->Children) {
                 self(self, child);
             }
+            currentProc = prevProc;
         };
 
         traverse(traverse, root);
@@ -75,13 +83,24 @@ namespace CompilerCPP {
                 _symbolTable.AddReference(node->Name, node->Line);
             }
         } else if (node->Value == "ReadStatement") {
-            auto sym = _symbolTable.Lookup(node->Name);
-            if (!sym) {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": محاولة القراءة إلى متغير غير معرف '" + node->Name + "'");
-            } else if (sym->Kind == "ثابت") {
-                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": لا يمكن القراءة إلى الثابت '" + node->Name + "'");
+            auto validateVar = [&](const std::string& varName, int lineNum) {
+                if (varName.empty()) return;
+                auto sym = _symbolTable.Lookup(varName);
+                if (!sym) {
+                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(lineNum) + ": محاولة القراءة إلى متغير غير معرف '" + varName + "'");
+                } else if (sym->Kind == "ثابت") {
+                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(lineNum) + ": لا يمكن القراءة إلى الثابت '" + varName + "'");
+                }
+                _symbolTable.AddReference(varName, lineNum);
+            };
+
+            if (!node->Children.empty()) {
+                for (const auto& child : node->Children) {
+                    validateVar(child->Name, child->Line);
+                }
+            } else if (!node->Name.empty()) {
+                validateVar(node->Name, node->Line);
             }
-            _symbolTable.AddReference(node->Name, node->Line);
         } else if (node->Value == "ForStatement") {
             if (!_symbolTable.Contains(node->Name)) {
                 _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": متغير العداد '" + node->Name + "' غير معرف في جملة 'كرر'");

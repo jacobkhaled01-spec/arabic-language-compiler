@@ -27,7 +27,22 @@ namespace CompilerCPP {
         if (!root->Children.empty()) {
             auto block = root->Children[0];
             if (!block->Children.empty()) {
-                GenerateDeclarations(block->Children[0]);
+                auto decls = block->Children[0];
+                bool hasProcs = false;
+                for (const auto& sec : decls->Children) {
+                    if (sec->Value == "ProcedureDecl") {
+                        hasProcs = true;
+                        break;
+                    }
+                }
+                std::string mainLabel = "L_MAIN_ENTRY";
+                if (hasProcs) {
+                    _tac.push_back("goto " + mainLabel);
+                }
+                GenerateDeclarations(decls);
+                if (hasProcs) {
+                    _tac.push_back(mainLabel + ":");
+                }
                 if (block->Children.size() > 1) {
                     auto stmtList = block->Children[1];
                     for (const auto& stmt : stmtList->Children) {
@@ -49,6 +64,26 @@ namespace CompilerCPP {
                 for (const auto& c : sec->Children) {
                     _tac.push_back(c->Name + " = " + c->Val);
                 }
+            } else if (sec->Value == "ProcedureDecl") {
+                std::string procName = sec->Name;
+                _tac.push_back("proc_" + procName + ":");
+                std::shared_ptr<Node> blockNode = nullptr;
+                for (const auto& child : sec->Children) {
+                    if (child->Value == "Parameters") {
+                        for (const auto& p : child->Children) {
+                            _tac.push_back(p->Name + " = pop_param");
+                        }
+                    } else if (child->Value == "Block") {
+                        blockNode = child;
+                    }
+                }
+                if (blockNode && blockNode->Children.size() > 1) {
+                    auto stmtList = blockNode->Children[1];
+                    for (const auto& s : stmtList->Children) {
+                        GenerateStatement(s);
+                    }
+                }
+                _tac.push_back("return");
             }
         }
     }
@@ -67,16 +102,25 @@ namespace CompilerCPP {
             }
             _tac.push_back(target + " = " + exprRes);
         } else if (node->Value == "PrintStatement") {
-            for (const auto& arg : node->Children) {
+            for (size_t i = 0; i < node->Children.size(); ++i) {
+                const auto& arg = node->Children[i];
+                bool isLast = (i + 1 == node->Children.size());
+                std::string cmd = isLast ? "print " : "print_raw ";
                 if (arg->Value == "StringLiteral") {
-                    _tac.push_back("print \"" + arg->Val + "\"");
+                    _tac.push_back(cmd + "\"" + arg->Val + "\"");
                 } else {
                     std::string res = GenerateExpression(arg);
-                    _tac.push_back("print " + res);
+                    _tac.push_back(cmd + res);
                 }
             }
         } else if (node->Value == "ReadStatement") {
-            _tac.push_back("read " + node->Name);
+            if (!node->Children.empty()) {
+                for (const auto& child : node->Children) {
+                    _tac.push_back("read " + child->Name);
+                }
+            } else if (!node->Name.empty()) {
+                _tac.push_back("read " + node->Name);
+            }
         } else if (node->Value == "IfStatement") {
             std::string cond = GenerateExpression(node->Children[0]);
             std::string trueLabel = NewLabel();
@@ -174,6 +218,12 @@ namespace CompilerCPP {
             _tac.push_back(loopVar + " = " + incTemp);
             _tac.push_back("goto " + startLabel);
             _tac.push_back(endLabel + ":");
+        } else if (node->Value == "CallStatement") {
+            for (const auto& arg : node->Children) {
+                std::string argVal = GenerateExpression(arg);
+                _tac.push_back("param " + argVal);
+            }
+            _tac.push_back("call proc_" + node->Name);
         }
     }
 

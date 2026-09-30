@@ -277,6 +277,12 @@ namespace CompilerCPP {
             return res.IsSuccess && res.ExecutionOutput.find("6") != std::string::npos;
         }, totalTests, passedTests);
 
+        RunTest("5.6 تكامل كامل: قراءة متغيرين في تعليمة اقرا واحدة وفصل المدخلات بانتر (Enter)", []() {
+            std::string code = "برنامج ادخال ؛ متغير س ، ص ، ناتج : صحيح ؛ { اقرا ( س ، ص ) ؛ ناتج = س + ص ؛ اطبع ( ناتج ) ؛ } .";
+            auto res = CompilerRunner::Compile(code, false, "15\n25");
+            return res.IsSuccess && res.ExecutionOutput.find("40") != std::string::npos;
+        }, totalTests, passedTests);
+
         std::cout << "\n=========================================================================================\n";
         double percentage = (static_cast<double>(passedTests) / totalTests) * 100.0;
         std::cout << "📊 التقرير النهائي للاختبارات (C++): نجح " << passedTests << " من أصل " << totalTests << " اختباراً (بنسبة " << percentage << "%)\n";

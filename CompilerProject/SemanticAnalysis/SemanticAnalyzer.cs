@@ -86,16 +86,21 @@ namespace CompilerProject.SemanticAnalysis
                     break;
 
                 case "ReadStatement":
-                    // فحص صحة متغير الإدخال
-                    if (node.Children.Count > 0)
+                    // فحص صحة كافة متغيرات الإدخال
+                    foreach (var child in node.Children)
                     {
-                        ValidateIdentifierUsage(node.Children[0].Name, node.Line);
+                        ValidateIdentifierUsage(child.Name, node.Line);
                     }
                     break;
 
                 case "BinaryExpr":
                     // فحص التوافق في العمليات
                     ValidateBinaryExpression(node);
+                    break;
+
+                case "IfStatement":
+                case "WhileStatement":
+                case "RepeatUntilStatement":
                     break;
             }
 
@@ -159,6 +164,89 @@ namespace CompilerProject.SemanticAnalysis
                     _errors.Add($"تحذير دلالي في السطر {line}: محاولة القسمة على صفر");
                 }
             }
+        }
+
+        private static bool IsConstantOrInfiniteCondition(Node cond, out string reason)
+        {
+            reason = "";
+            if (cond == null) return false;
+
+            // 1. الأعداد الثابتة (مثل 50 أو 1 أو 0)
+            string val = !string.IsNullOrEmpty(cond.Val) ? cond.Val : cond.Name;
+            if (cond.Value == "Number" || double.TryParse(val, out _))
+            {
+                if (double.TryParse(val, out double num))
+                {
+                    reason = $"قيمة عددية ثابتة '{val}'";
+                    return true;
+                }
+            }
+
+            // 2. الثوابت المنطقية (صواب، صح، true، خطأ، خطا، false)
+            if (cond.Value == "Boolean" || val is "صواب" or "صح" or "true" or "خطأ" or "خطا" or "false")
+            {
+                reason = $"قيمة منطقية ثابتة '{val}'";
+                return true;
+            }
+
+            // 3. مقارنة التعبيرات الثنائية
+            if (cond.Value == "BinaryExpr" && cond.Children.Count == 2)
+            {
+                var left = cond.Children[0];
+                var right = cond.Children[1];
+                string op = !string.IsNullOrEmpty(cond.Val) ? cond.Val : cond.Name;
+
+                // مقارنة المتغير بنفسه: س == س أو س != س
+                string lName = !string.IsNullOrEmpty(left.Name) ? left.Name : left.Val;
+                string rName = !string.IsNullOrEmpty(right.Name) ? right.Name : right.Val;
+                if (!string.IsNullOrEmpty(lName) && lName == rName)
+                {
+                    reason = $"مقارنة متطابقة ({lName} {op} {rName})";
+                    return true;
+                }
+
+                // مقارنة ثوابت عددية مباشرة: 50 > 10
+                string lStr = !string.IsNullOrEmpty(left.Val) ? left.Val : left.Name;
+                string rStr = !string.IsNullOrEmpty(right.Val) ? right.Val : right.Name;
+                if (double.TryParse(lStr, out double lVal) && double.TryParse(rStr, out double rVal))
+                {
+                    reason = $"مقارنة ثوابت عددية ({lVal} {op} {rVal})";
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsAlwaysFalseCondition(Node cond, out string reason)
+        {
+            reason = "";
+            if (cond == null) return false;
+            string val = !string.IsNullOrEmpty(cond.Val) ? cond.Val : cond.Name;
+            if (cond.Value == "Boolean" && (val is "خطأ" or "خطا" or "false"))
+            {
+                reason = "شرط دائم الخطأ 'خطأ'";
+                return true;
+            }
+            if (cond.Value == "Number" && (val == "0"))
+            {
+                reason = "شرط دائم الخطأ '0'";
+                return true;
+            }
+            if (cond.Value == "BinaryExpr" && cond.Children.Count == 2)
+            {
+                var left = cond.Children[0];
+                var right = cond.Children[1];
+                string op = !string.IsNullOrEmpty(cond.Val) ? cond.Val : cond.Name;
+                string lName = !string.IsNullOrEmpty(left.Name) ? left.Name : left.Val;
+                string rName = !string.IsNullOrEmpty(right.Name) ? right.Name : right.Val;
+                if (!string.IsNullOrEmpty(lName) && lName == rName && op == "!=")
+                {
+                    reason = $"مقارنة متطابقة مستحيلة التحقق ({lName} != {rName})";
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static string InferLiteralType(string val)

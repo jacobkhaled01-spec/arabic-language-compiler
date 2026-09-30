@@ -22,6 +22,7 @@ namespace CompilerCPP {
         Token ExpectType(TokenType expectedType, const std::string& errorMessage);
         bool Match(const std::string& val);
         bool MatchType(TokenType type);
+        bool MatchComma();
 
         std::shared_ptr<Node> ParseBlock();
         std::shared_ptr<Node> ParseDeclarations();

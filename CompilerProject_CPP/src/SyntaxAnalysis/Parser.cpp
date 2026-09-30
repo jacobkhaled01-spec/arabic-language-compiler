@@ -56,6 +56,10 @@ namespace CompilerCPP {
         return false;
     }
 
+    bool Parser::MatchComma() {
+        return Match("،") || Match(",");
+    }
+
     void Parser::Synchronize() {
         while (!IsAtEnd() && Current().Value != "}" && Current().Value != ".") {
             if (Current().Value == "؛") {
@@ -80,10 +84,8 @@ namespace CompilerCPP {
         auto progRoot = std::make_shared<Node>("ProgramRoot", progName.Value, progName.Line);
         progRoot->AddChild(ParseBlock());
         
-        if (Current().Value == ".") {
+        while (Current().Value == "." || Current().Value == "}" || Current().Value == "{" || Current().Value == "؛") {
             Advance();
-        } else {
-            Errors.push_back("خطأ نحوي في السطر " + std::to_string(Current().Line) + ": يجب إنهاء البرنامج بنقطة '.'");
         }
 
         if (!Errors.empty() && progRoot->Children.empty()) {
@@ -97,9 +99,15 @@ namespace CompilerCPP {
         auto blockNode = std::make_shared<Node>("Block", Current().Line);
         blockNode->AddChild(ParseDeclarations());
 
-        Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+        if (Current().Value == "{" || Current().Value == "}") {
+            Advance();
+        } else {
+            Expect("{", "يجب فتح قوس مجموعة '{' لبدء قائمة التعليمات");
+        }
         blockNode->AddChild(ParseStatementList());
-        Expect("}", "يجب إغلاق قوس المجموعة '}' لإنهاء الكتلة");
+        if (Current().Value == "}" || Current().Value == "{") {
+            Advance();
+        }
         return blockNode;
     }
 
@@ -166,7 +174,7 @@ namespace CompilerCPP {
                         while (Current().Type == TokenType::Identifier) {
                             std::vector<std::string> fieldNames;
                             fieldNames.push_back(Advance().Value);
-                            while (Match(",")) {
+                            while (MatchComma()) {
                                 fieldNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم الحقل").Value);
                             }
                             Expect(":", "يجب وضع نقطتين ':' بعد أسماء الحقول");
@@ -201,7 +209,7 @@ namespace CompilerCPP {
                 while (Current().Type == TokenType::Identifier) {
                     std::vector<Token> varNames;
                     varNames.push_back(Advance());
-                    while (Match(",")) {
+                    while (MatchComma()) {
                         varNames.push_back(ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير بعد الفاصلة"));
                     }
 
@@ -245,7 +253,7 @@ namespace CompilerCPP {
                         paramNode->Val = passMode;
                         paramsNode->AddChild(paramNode);
 
-                        if (!Match("؛") && !Match(",")) break;
+                        if (!Match("؛") && !MatchComma()) break;
                     }
                     Expect(")", "يجب إغلاق القوس ')' لقائمة المعاملات");
                     procNode->AddChild(paramsNode);
@@ -269,7 +277,7 @@ namespace CompilerCPP {
 
     std::shared_ptr<Node> Parser::ParseStatementList() {
         auto listNode = std::make_shared<Node>("StatementList", Current().Line);
-        while (Current().Value != "}" && Current().Type != TokenType::EndOfFile) {
+        while (Current().Value != "}" && Current().Value != "{" && Current().Value != "." && Current().Type != TokenType::EndOfFile) {
             try {
                 auto stmt = ParseStatement();
                 if (stmt) {
@@ -335,7 +343,7 @@ namespace CompilerCPP {
                 auto callNode = std::make_shared<Node>("CallStatement", varToken.Value, line);
                 if (Current().Value != ")") {
                     callNode->AddChild(ParseExpression());
-                    while (Match(",")) {
+                    while (MatchComma()) {
                         callNode->AddChild(ParseExpression());
                     }
                 }
@@ -396,18 +404,20 @@ namespace CompilerCPP {
     std::shared_ptr<Node> Parser::ParseWhileStatement() {
         int line = Current().Line;
         Advance(); // طالما
-        Expect("(", "يجب فتح قوس '(' لشرط 'طالما'");
+        if (Current().Value == "(" || Current().Value == ")") Advance();
+        else Expect("(", "يجب فتح قوس '(' لشرط 'طالما'");
         auto cond = ParseExpression();
-        Expect(")", "يجب إغلاق القوس ')' لشرط 'طالما'");
+        if (Current().Value == ")" || Current().Value == "(") Advance();
+        else Expect(")", "يجب إغلاق القوس ')' لشرط 'طالما'");
         Expect("استمر", "يجب وضع كلمة 'استمر' بعد شرط 'طالما'");
 
         auto whileNode = std::make_shared<Node>("WhileStatement", line);
         whileNode->AddChild(cond);
 
-        if (Current().Value == "{") {
+        if (Current().Value == "{" || Current().Value == "}") {
             Advance();
             whileNode->AddChild(ParseStatementList());
-            Expect("}", "يجب إغلاق قوس المجموعة '}' لحلقة 'طالما'");
+            if (Current().Value == "}" || Current().Value == "{") Advance();
         } else {
             whileNode->AddChild(ParseStatement());
         }
@@ -481,7 +491,7 @@ namespace CompilerCPP {
 
         if (Current().Value != ")") {
             printNode->AddChild(ParseExpression());
-            while (Match(",")) {
+            while (MatchComma()) {
                 printNode->AddChild(ParseExpression());
             }
         }
@@ -495,13 +505,22 @@ namespace CompilerCPP {
         int line = Current().Line;
         Advance(); // اقرا / اقرأ / اقرء
         bool hasParen = Match("(");
-        auto varToken = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير المراد القراءة إليه");
+        
+        auto readNode = std::make_shared<Node>("ReadStatement", "", line);
+        auto firstVar = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير المراد القراءة إليه");
+        readNode->Name = firstVar.Value;
+        readNode->AddChild(std::make_shared<Node>("Identifier", firstVar.Value, line));
+
+        while (MatchComma()) {
+            auto nextVar = ExpectType(TokenType::Identifier, "يجب كتابة اسم المتغير بعد الفاصلة في تعليمة 'اقرا'");
+            readNode->AddChild(std::make_shared<Node>("Identifier", nextVar.Value, line));
+        }
+
         if (hasParen) {
             Expect(")", "يجب إغلاق القوس ')' لتعليمة 'اقرا'");
         }
         Expect("؛", "يجب إنهاء تعليمة 'اقرا' بفاصلة منقوطة '؛'");
 
-        auto readNode = std::make_shared<Node>("ReadStatement", varToken.Value, line);
         return readNode;
     }
 
@@ -603,9 +622,9 @@ namespace CompilerCPP {
             return uNode;
         }
 
-        if (Match("(")) {
+        if (Match("(") || Match(")")) {
             auto node = ParseExpression();
-            Expect(")", "يجب إغلاق القوس ')' في التعبير");
+            if (Current().Value == ")" || Current().Value == "(") Advance();
             return node;
         }
 
@@ -661,7 +680,7 @@ namespace CompilerCPP {
                 auto call = std::make_shared<Node>("FunctionCall", t.Value, line);
                 if (Current().Value != ")") {
                     call->AddChild(ParseExpression());
-                    while (Match(",")) {
+                    while (MatchComma()) {
                         call->AddChild(ParseExpression());
                     }
                 }

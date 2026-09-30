@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using CompilerProject.Models;
 
@@ -36,7 +37,29 @@ namespace CompilerProject.IntermediateCode
             _instructions.Add($"// بداية الكود الوسيط (TAC) للبرنامج: {rootNode.Name}");
             _instructions.Add("// ===================================================");
 
-            GenerateNode(rootNode);
+            if (rootNode.Children.Count > 0)
+            {
+                var block = rootNode.Children[0];
+                if (block.Children.Count > 0)
+                {
+                    var decls = block.Children[0];
+                    bool hasProcs = decls.Children.Any(c => c.Value == "ProcDecl");
+                    string mainLabel = "L_MAIN_ENTRY";
+                    if (hasProcs)
+                    {
+                        _instructions.Add($"goto {mainLabel}");
+                    }
+                    GenerateNode(decls);
+                    if (hasProcs)
+                    {
+                        _instructions.Add($"{mainLabel}:");
+                    }
+                    if (block.Children.Count > 1)
+                    {
+                        GenerateNode(block.Children[1]);
+                    }
+                }
+            }
 
             _instructions.Add("// نهاية البرنامج");
             return _instructions;
@@ -69,9 +92,9 @@ namespace CompilerProject.IntermediateCode
                     break;
 
                 case "ReadStatement":
-                    if (node.Children.Count > 0)
+                    foreach (var child in node.Children)
                     {
-                        string varName = node.Children[0].Name;
+                        string varName = child.Name;
                         _instructions.Add($"read {varName}");
                     }
                     break;
@@ -95,12 +118,48 @@ namespace CompilerProject.IntermediateCode
                 case "ForStatement":
                     GenerateFor(node);
                     break;
+
+                case "ProcDecl":
+                    string procName = node.Name;
+                    _instructions.Add($"proc_{procName}:");
+                    foreach (var child in node.Children)
+                    {
+                        if (child.Value is "FormalParams" or "Parameters")
+                        {
+                            foreach (var p in child.Children)
+                            {
+                                _instructions.Add($"{p.Name} = pop_param");
+                            }
+                        }
+                        else if (child.Value == "Block")
+                        {
+                            GenerateNode(child);
+                        }
+                    }
+                    _instructions.Add("return");
+                    break;
+
+                case "CallStatement":
+                    foreach (var arg in node.Children)
+                    {
+                        string argVal = GenerateExpression(arg);
+                        _instructions.Add($"param {argVal}");
+                    }
+                    _instructions.Add($"call proc_{node.Name}");
+                    break;
             }
         }
 
         private void GenerateAssign(Node assignNode)
         {
             string varName = assignNode.Name;
+            if (assignNode.Children.Count > 0 && assignNode.Children[0].Value == "IndexedAccess")
+            {
+                var idxAccess = assignNode.Children[0];
+                string target = idxAccess.Children.Count > 0 ? GenerateExpression(idxAccess.Children[0]) : "arr";
+                string idx = idxAccess.Children.Count > 1 ? GenerateExpression(idxAccess.Children[1]) : "0";
+                varName = $"{target}[{idx}]";
+            }
             if (assignNode.Children.Count > 1)
             {
                 string exprResult = GenerateExpression(assignNode.Children[1]);
@@ -110,16 +169,19 @@ namespace CompilerProject.IntermediateCode
 
         private void GeneratePrint(Node printNode)
         {
-            foreach (var child in printNode.Children)
+            for (int i = 0; i < printNode.Children.Count; i++)
             {
+                var child = printNode.Children[i];
+                bool isLast = (i + 1 == printNode.Children.Count);
+                string cmd = isLast ? "print " : "print_raw ";
                 if (child.Value == "StringLiteral")
                 {
-                    _instructions.Add($"print \"{child.Val}\"");
+                    _instructions.Add($"{cmd}\"{child.Val}\"");
                 }
                 else
                 {
                     string res = GenerateExpression(child);
-                    _instructions.Add($"print {res}");
+                    _instructions.Add($"{cmd}{res}");
                 }
             }
         }

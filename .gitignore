@@ -10,6 +10,7 @@ publish_temp/
 Installer_Output/
 تسليم_المشروع_Final_Delivery/PREXE-GN/
 تسليم_المشروع_Final_Delivery/PREXE_SingleFile/
+تسليم_المشروع_Final_Delivery/RPT-G20/
 
 # Compiled Binaries & Object Files
 *.obj
@@ -50,9 +51,25 @@ $RECYCLE.BIN/
 
 scratch_pub/
 G20/
-
-
-G20/
 *.rar
 *.zip
 
+# Backup files
+*.bak
+*.bak*
+
+# Scratch, temporary and debug files
+scratch/
+backups_before_cmd_fixes/
+crop_prompt.png
+tac_dump.json
+scratch_test_code.arb
+CompilerProject_CPP/test_grab.py
+CompilerProject_CPP/src/test_font.cpp
+CompilerProject_CPP/src/test_setfont.cpp
+CompilerProject_CPP/src/test_console_arabic.cpp
+CompilerProject_CPP/src/inspect_font.cpp
+CompilerProject_CPP/run_test_font.bat
+CompilerProject_CPP/run_setfont.bat
+CompilerProject_CPP/run_inspect.bat
+CompilerProject_CPP/run_build_test_arabic.bat

@@ -465,11 +465,18 @@ namespace CompilerProject.CodeGeneration
                     string normalized = NormalizeDigits(input);
                     if (!string.IsNullOrWhiteSpace(normalized))
                     {
-                        var lines = normalized.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-                        foreach (var rawLine in lines)
+                        normalized = normalized.Replace('،', ' ').Replace(',', ' ');
+                        var tokens = normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                        if (tokens.Length > 0)
                         {
-                            string trimmed = rawLine.Trim();
-                            process.StandardInput.WriteLine(string.IsNullOrEmpty(trimmed) ? "0" : trimmed);
+                            foreach (var token in tokens)
+                            {
+                                process.StandardInput.WriteLine(token.Trim());
+                            }
+                        }
+                        else
+                        {
+                            process.StandardInput.WriteLine("0");
                         }
                     }
                     else
