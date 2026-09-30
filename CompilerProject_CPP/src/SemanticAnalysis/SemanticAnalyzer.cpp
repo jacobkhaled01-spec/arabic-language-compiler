@@ -52,6 +52,18 @@ namespace CompilerCPP {
                 if (!_symbolTable.Add(node->Name, "اجراء", "اجراء", node->Line, "-")) {
                     _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": إعادة تعريف الإجراء '" + node->Name + "'");
                 }
+                std::vector<ParamMetadata> params;
+                for (const auto& child : node->Children) {
+                    if (child && child->Value == "Parameters") {
+                        for (const auto& pNode : child->Children) {
+                            if (pNode && pNode->Value == "ParamDecl") {
+                                params.push_back({ pNode->Name, pNode->DataType, pNode->Val });
+                                _symbolTable.Add(pNode->Name, pNode->DataType, "معامل_" + pNode->Val, pNode->Line, "-");
+                            }
+                        }
+                    }
+                }
+                _procedureSignatures[node->Name] = params;
             } else if (node->Value == "ParamDecl") {
                 _symbolTable.Add(node->Name, node->DataType, "معامل_" + node->Val, node->Line, "معامل إجرائي");
             }
@@ -65,6 +77,23 @@ namespace CompilerCPP {
         traverse(traverse, root);
     }
 
+    void SemanticAnalyzer::CheckExpressionVariables(const std::shared_ptr<Node>& exprNode) {
+        if (!exprNode) return;
+
+        if (exprNode->Value == "Variable") {
+            auto sym = _symbolTable.Lookup(exprNode->Name);
+            if (!sym) {
+                _errors.push_back("خطأ دلالي في السطر " + std::to_string(exprNode->Line) + ": استخدام المعرف غير المعرف '" + exprNode->Name + "' في التعبير الحسابي");
+            } else {
+                _symbolTable.AddReference(exprNode->Name, exprNode->Line);
+            }
+        }
+
+        for (const auto& child : exprNode->Children) {
+            CheckExpressionVariables(child);
+        }
+    }
+
     void SemanticAnalyzer::CheckStatementsAndReferences(const std::shared_ptr<Node>& node) {
         if (!node) return;
 
@@ -76,6 +105,10 @@ namespace CompilerCPP {
                 _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": لا يمكن تغيير قيمة الثابت '" + node->Name + "'");
             }
             _symbolTable.AddReference(node->Name, node->Line);
+
+            for (const auto& child : node->Children) {
+                CheckExpressionVariables(child);
+            }
         } else if (node->Value == "Variable") {
             if (!_symbolTable.Contains(node->Name)) {
                 _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": استخدام المعرف غير المعرف '" + node->Name + "'");
@@ -106,6 +139,37 @@ namespace CompilerCPP {
                 _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": متغير العداد '" + node->Name + "' غير معرف في جملة 'كرر'");
             }
             _symbolTable.AddReference(node->Name, node->Line);
+        } else if (node->Value == "CallStatement") {
+            auto sym = _symbolTable.Lookup(node->Name);
+            if (!sym) {
+                _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": استدعاء إجراء غير معرف '" + node->Name + "'");
+            } else {
+                _symbolTable.AddReference(node->Name, node->Line);
+
+                auto sigIt = _procedureSignatures.find(node->Name);
+                if (sigIt != _procedureSignatures.end()) {
+                    const auto& expectedParams = sigIt->second;
+                    if (node->Children.size() != expectedParams.size()) {
+                        _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": عدم تطابق عدد المعاملات عند استدعاء الإجراء '" + node->Name + "' (المتوقع " + std::to_string(expectedParams.size()) + " ووُجد " + std::to_string(node->Children.size()) + ")");
+                    } else {
+                        for (size_t i = 0; i < expectedParams.size(); ++i) {
+                            const auto& param = expectedParams[i];
+                            const auto& argNode = node->Children[i];
+
+                            if (param.PassMode == "بالمرجع") {
+                                if (!argNode || (argNode->Value != "Variable" && argNode->Value != "FieldAccess" && argNode->Value != "IndexedAccess")) {
+                                    _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": المعامل رقم " + std::to_string(i + 1) + " في استدعاء الإجراء '" + node->Name + "' معرف بـ 'بالمرجع' ويجب تمرير متغير وليس تعبيراً أو قيمة ثابتة");
+                                } else if (argNode->Value == "Variable") {
+                                    auto argSym = _symbolTable.Lookup(argNode->Name);
+                                    if (argSym && argSym->Kind == "ثابت") {
+                                        _errors.push_back("خطأ دلالي في السطر " + std::to_string(node->Line) + ": لا يمكن تمرير الثابت '" + argSym->Name + "' كمعامل بالمرجع للإجراء '" + node->Name + "'");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         for (const auto& child : node->Children) {

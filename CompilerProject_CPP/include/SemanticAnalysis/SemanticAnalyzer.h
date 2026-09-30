@@ -7,13 +7,21 @@
 
 namespace CompilerCPP {
 
+    struct ParamMetadata {
+        std::string Name;
+        std::string DataType;
+        std::string PassMode;
+    };
+
     class SemanticAnalyzer {
     private:
         SymbolTable& _symbolTable;
         std::vector<std::string> _errors;
+        std::unordered_map<std::string, std::vector<ParamMetadata>> _procedureSignatures;
 
         void PopulateDeclarations(const std::shared_ptr<Node>& root);
         void CheckStatementsAndReferences(const std::shared_ptr<Node>& node);
+        void CheckExpressionVariables(const std::shared_ptr<Node>& exprNode);
 
     public:
         explicit SemanticAnalyzer(SymbolTable& symbolTable);

@@ -84,6 +84,12 @@ namespace CompilerCPP {
         auto progRoot = std::make_shared<Node>("ProgramRoot", progName.Value, progName.Line);
         progRoot->AddChild(ParseBlock());
         
+        if (Current().Value == ".") {
+            Advance();
+        } else {
+            Errors.push_back("خطأ نحوي في السطر " + std::to_string(Current().Line) + ": يجب إنهاء البرنامج بنقطة '.'");
+        }
+
         while (Current().Value == "." || Current().Value == "}" || Current().Value == "{" || Current().Value == "؛") {
             Advance();
         }

@@ -108,6 +108,8 @@ namespace CompilerCPP {
 
         if (_pos < _src.size() && Current() == quoteChar) {
             Advance(); // Skip closing quote
+        } else {
+            Errors.push_back("خطأ معجمي في السطر " + std::to_string(startLine) + ": سلسلة رمزية غير مغلقة، يجب إغلاقها بعلامة تنصيص '\"'");
         }
 
         return Token(str, TokenType::String, startLine);
@@ -117,15 +119,21 @@ namespace CompilerCPP {
         int startLine = _line;
         Advance(startQuote.size());
         std::string str;
+        bool closed = false;
 
         while (_pos < _src.size()) {
             if (_pos + endQuote.size() <= _src.size() && _src.substr(_pos, endQuote.size()) == endQuote) {
                 Advance(endQuote.size());
+                closed = true;
                 break;
             }
             if (Current() == '\n') _line++;
             str += Current();
             Advance();
+        }
+
+        if (!closed) {
+            Errors.push_back("خطأ معجمي في السطر " + std::to_string(startLine) + ": سلسلة رمزية ذكية غير مغلقة");
         }
 
         return Token(str, TokenType::String, startLine);
@@ -144,6 +152,8 @@ namespace CompilerCPP {
 
         if (_pos < _src.size() && Current() == '\'') {
             Advance();
+        } else {
+            Errors.push_back("خطأ معجمي في السطر " + std::to_string(startLine) + ": رمز مفرد غير مغلق");
         }
 
         return Token(ch, TokenType::Char, startLine);
@@ -151,6 +161,7 @@ namespace CompilerCPP {
 
     std::vector<Token> Lexer::Tokenize() {
         std::vector<Token> tokens;
+        Errors.clear();
 
         while (_pos < _src.size()) {
             char c = Current();
@@ -170,13 +181,20 @@ namespace CompilerCPP {
                     Advance();
                 }
             } else if (c == '/' && Peek(1) == '*') {
+                int startCommentLine = _line;
                 Advance(2);
-                while (_pos + 1 < _src.size() && !(Current() == '*' && Peek(1) == '/')) {
+                bool closed = false;
+                while (_pos + 1 < _src.size()) {
+                    if (Current() == '*' && Peek(1) == '/') {
+                        Advance(2); // Skip */
+                        closed = true;
+                        break;
+                    }
                     if (Current() == '\n') _line++;
                     Advance();
                 }
-                if (_pos + 1 < _src.size()) {
-                    Advance(2); // Skip */
+                if (!closed) {
+                    Errors.push_back("خطأ معجمي في السطر " + std::to_string(startCommentLine) + ": تعليق متعدد الأسطر غير مغلق '*/'");
                 }
             }
             // 3. علامات التنصيص المنحنية الذكية “”
@@ -237,6 +255,7 @@ namespace CompilerCPP {
             }
             // 11. رمز مجهول
             else {
+                Errors.push_back("خطأ معجمي في السطر " + std::to_string(_line) + ": رمز غير معروف أو غير مدعوم '" + std::string(1, c) + "'");
                 tokens.emplace_back(std::string(1, c), TokenType::Unknown, _line);
                 Advance();
             }
