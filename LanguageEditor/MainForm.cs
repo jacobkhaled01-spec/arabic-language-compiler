@@ -781,6 +781,58 @@ namespace LanguageEditor
         }
 
         /// <summary>
+        /// استدعاء المترجم بشكل غير متزامن في الخلفية: محاولة استخدام C++ فائق السرعة أولاً ثم C# كبديل احتياطي
+        /// </summary>
+        private async Task<CompilationResult> CompileCodeAsync(string code)
+        {
+            return await Task.Run(() =>
+            {
+                CompilationResult? result = null;
+                string compilerExe = FindCompilerExe();
+                if (!string.IsNullOrEmpty(compilerExe) && File.Exists(compilerExe))
+                {
+                    string tempSourceFile = Path.Combine(Path.GetTempPath(), $"live_{Guid.NewGuid():N}.arb");
+                    try
+                    {
+                        File.WriteAllText(tempSourceFile, code, new UTF8Encoding(false));
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = compilerExe,
+                            Arguments = $"\"{tempSourceFile}\" --json",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            StandardOutputEncoding = Encoding.UTF8
+                        };
+                        using var proc = Process.Start(psi);
+                        if (proc != null)
+                        {
+                            string json = proc.StandardOutput.ReadToEnd();
+                            proc.WaitForExit(3000);
+                            if (!string.IsNullOrWhiteSpace(json) && json.Contains("IsSuccess"))
+                            {
+                                result = JsonSerializer.Deserialize<CompilationResult>(json);
+                            }
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        try { if (File.Exists(tempSourceFile)) File.Delete(tempSourceFile); } catch { }
+                    }
+                }
+
+                if (result == null)
+                {
+                    result = CompilerRunner.Compile(code, isVerbose: false, runInterpreter: false);
+                }
+
+                return result;
+            });
+        }
+
+        /// <summary>
         /// التحليل اللحظي المباشر الذي يعمل في خيط خلفي فور كتابة أو لصق الكود بدون أي تجميد للواجهة
         /// </summary>
         private async void RunLiveAnalysis()
@@ -795,8 +847,7 @@ namespace LanguageEditor
 
             try
             {
-                // تنفيذ التحليل بالكامل مباشرة في الذاكرة عبر خيط خلفي فائق السرعة بدون تشغيل المفسر وبدون حجب الواجهة
-                var result = await Task.Run(() => CompilerRunner.Compile(code, isVerbose: false, runInterpreter: false));
+                var result = await CompileCodeAsync(code);
 
                 // إذا تغير نص المحرر أثناء التحليل، يتم تجاهل النتيجة تفادياً للتحديثات المتأخرة
                 if (_codeEditor.Text != code) return;
@@ -964,19 +1015,18 @@ namespace LanguageEditor
             _consoleOutputTextBox.Clear();
         }
 
-        private void CompileAndRun()
+        private async void CompileAndRun()
         {
             _statusLabel.Text = "جاري الترجمة والتحقق من سلامة الكود...";
 
-            // استخدام المترجم المدمج مباشرة لضمان أقصى سرعة واستجابة فورية بدون أي تجميد
-            CompilationResult result = CompilerRunner.Compile(_codeEditor.Text, isVerbose: false, runInterpreter: false);
+            var result = await CompileCodeAsync(_codeEditor.Text);
 
             DisplayCompilationResult(result, isExecutionRun: true);
 
             // تشغيل البرنامج في نافذة كونسول مستقلة (Visual Studio Console)
-            if (result.IsSuccess || (result.SyntaxErrors.Count == 0 && result.TAC.Count > 0))
+            if (result.IsSuccess || ((result.SyntaxErrors?.Count ?? 0) == 0 && (result.TAC?.Count ?? 0) > 0))
             {
-                var consoleForm = new VsConsoleForm(result.TAC, _currentFilePath ?? "arabic_program.arb");
+                var consoleForm = new VsConsoleForm(result.TAC ?? new List<string>(), _currentFilePath ?? "arabic_program.arb");
                 consoleForm.Show(this);
             }
         }
@@ -995,55 +1045,12 @@ namespace LanguageEditor
             {
                 ClearOutputs();
 
-                // 1. عرض الرموز المعجمية (Tokens)
-                int tokenIdx = 1;
-                foreach (var t in result.Tokens)
-                {
-                    _tokensGrid.Rows.Add(tokenIdx++, t.Value, t.Type, t.Line);
-                }
-
-                // 2. عرض شجرة الإعراب (Parse Tree) والشجرة المجردة (AST)
-                if (result.AST != null)
-                {
-                    // أ. شجرة الإعراب النحوية (Parse Tree / CST)
-                    _cstTreeView.Nodes.Clear();
-                    var cstRootNode = BuildParseTreeFromDto(result.AST, result.Tokens);
-                    _cstTreeView.Nodes.Add(cstRootNode);
-                    cstRootNode.Expand(); // توسيع المستوى الأول فقط لسرعة فائقة واستجابة فورية
-
-                    // ب. الشجرة المجردة الدلالية (AST)
-                    _astTreeView.Nodes.Clear();
-                    var astRootNode = BuildTreeNodeFromDto(result.AST);
-                    _astTreeView.Nodes.Add(astRootNode);
-                    astRootNode.Expand(); // توسيع المستوى الأول فقط
-                }
-
-                // 3. عرض جدول الرموز (Symbol Table)
-                foreach (var s in result.SymbolTable)
-                {
-                    _symbolTableGrid.Rows.Add(s.Name, s.DataType, s.Kind, s.Value, s.DeclaredLine, s.ReferencedLines);
-                }
-
-                // 4. عرض الكود الوسيط (TAC)
-                var tacSb = new StringBuilder();
-                foreach (var line in result.TAC)
-                {
-                    tacSb.AppendLine(line);
-                }
-                _tacTextBox.Text = tacSb.ToString();
-
-                // 5. عرض لغة التجميع (x86 Assembly)
-                _asmTextBox.Text = result.AssemblyCode;
-
-                // 6. عرض .NET CIL
-                _cilTextBox.Text = result.CILCode;
-
-                // 7. عرض الأخطاء (Errors)
+                // 1. عرض الأخطاء أولاً وبأعلى أولوية (Critical First: Errors Display)
                 bool hasErrors = false;
                 var consoleSb = new StringBuilder();
                 int errorNumber = 1;
 
-                if (result.SyntaxErrors.Count > 0)
+                if (result.SyntaxErrors != null && result.SyntaxErrors.Count > 0)
                 {
                     hasErrors = true;
                     foreach (var err in result.SyntaxErrors)
@@ -1054,7 +1061,7 @@ namespace LanguageEditor
                     }
                 }
 
-                if (result.SemanticErrors.Count > 0)
+                if (result.SemanticErrors != null && result.SemanticErrors.Count > 0)
                 {
                     hasErrors = true;
                     foreach (var err in result.SemanticErrors)
@@ -1065,10 +1072,9 @@ namespace LanguageEditor
                     }
                 }
 
-                int totalErrors = result.SyntaxErrors.Count + result.SemanticErrors.Count;
+                int totalErrors = (result.SyntaxErrors?.Count ?? 0) + (result.SemanticErrors?.Count ?? 0);
                 _tabErrors.Text = hasErrors ? $"⚠️ قائمة الأخطاء ({totalErrors})" : "⚠️ قائمة الأخطاء";
 
-                // 8. التعامل مع شاشة التشغيل (Visual Studio Command Prompt Theme)
                 if (hasErrors)
                 {
                     var errorBanner = new StringBuilder();
@@ -1081,7 +1087,6 @@ namespace LanguageEditor
 
                     _consoleOutputTextBox.ForeColor = Color.FromArgb(255, 120, 120);
                     _consoleOutputTextBox.Text = errorBanner.ToString();
-
                     _statusLabel.Text = $"❌ تم اكتشاف ({totalErrors}) خطأ في الكود (انظر تبويب قائمة الأخطاء)";
 
                     if (isExecutionRun)
@@ -1096,7 +1101,7 @@ namespace LanguageEditor
                     successSb.AppendLine("1> المحلل المعجمي (Lexer): تم استخراج كافة الرموز بنجاح.");
                     successSb.AppendLine("1> المحلل النحوي (Parser): تم بناء شجرة الإعراب (AST) بنجاح.");
                     successSb.AppendLine("1> المحلل الدلالي (Semantic): تم فحص جدول الرموز والأنواع بنجاح بدون أخطاء.");
-                    successSb.AppendLine($"1> الكود الوسيط (TAC): تم توليد ({result.TAC.Count}) تعليمة ثلاثية العناوين.");
+                    successSb.AppendLine($"1> الكود الوسيط (TAC): تم توليد ({result.TAC?.Count ?? 0}) تعليمة ثلاثية العناوين.");
                     successSb.AppendLine("1> مولد كود التجميع (Assembly): تم توليد كود x86 و .NET CIL بنجاح.");
                     successSb.AppendLine("========== البناء: نجح 1، فشل 0، تم التحديث 0 ==========");
 
@@ -1115,6 +1120,84 @@ namespace LanguageEditor
                     _consoleOutputTextBox.ForeColor = Color.FromArgb(180, 230, 180);
                     _consoleOutputTextBox.Text = successSb.ToString();
                 }
+
+                // 2. عرض الرموز المعجمية (Tokens) بأمان
+                if (result.Tokens != null)
+                {
+                    try
+                    {
+                        int tokenIdx = 1;
+                        foreach (var t in result.Tokens)
+                        {
+                            _tokensGrid.Rows.Add(tokenIdx++, t.Value, t.Type, t.Line);
+                        }
+                    }
+                    catch { }
+                }
+
+                // 3. عرض شجرة الإعراب والشجرة المجردة بأمان
+                if (result.AST != null)
+                {
+                    try
+                    {
+                        _cstTreeView.Nodes.Clear();
+                        var cstRootNode = BuildParseTreeFromDto(result.AST, result.Tokens ?? new List<TokenDto>());
+                        if (cstRootNode != null)
+                        {
+                            _cstTreeView.Nodes.Add(cstRootNode);
+                            cstRootNode.Expand();
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        _astTreeView.Nodes.Clear();
+                        var astRootNode = BuildTreeNodeFromDto(result.AST);
+                        if (astRootNode != null)
+                        {
+                            _astTreeView.Nodes.Add(astRootNode);
+                            astRootNode.Expand();
+                        }
+                    }
+                    catch { }
+                }
+
+                // 4. عرض جدول الرموز (Symbol Table) بأمان
+                if (result.SymbolTable != null)
+                {
+                    try
+                    {
+                        foreach (var s in result.SymbolTable)
+                        {
+                            _symbolTableGrid.Rows.Add(s.Name, s.DataType, s.Kind, s.Value, s.DeclaredLine, s.ReferencedLines);
+                        }
+                    }
+                    catch { }
+                }
+
+                // 5. عرض الكود الوسيط (TAC) بأمان
+                if (result.TAC != null)
+                {
+                    try
+                    {
+                        var tacSb = new StringBuilder();
+                        foreach (var line in result.TAC)
+                        {
+                            tacSb.AppendLine(line);
+                        }
+                        _tacTextBox.Text = tacSb.ToString();
+                    }
+                    catch { }
+                }
+
+                // 6. عرض لغة التجميع (Assembly & CIL) بأمان
+                try
+                {
+                    _asmTextBox.Text = result.AssemblyCode ?? "";
+                    _cilTextBox.Text = result.CILCode ?? "";
+                }
+                catch { }
             }
             finally
             {
@@ -1258,8 +1341,11 @@ namespace LanguageEditor
             return root;
         }
 
-        private TreeNode BuildCstStatementNode(NodeDto node)
+        private TreeNode BuildCstStatementNode(NodeDto? node)
         {
+            if (node == null) return new TreeNode("<عقدة_فارغة>");
+            if (node.Children == null) node.Children = new List<NodeDto>();
+
             if (node.Value == "Assign" || node.Value == "Assignment")
             {
                 var nodeCst = new TreeNode($"<تعليمة_إسناد>: {node.Name} = ...");
@@ -1295,16 +1381,32 @@ namespace LanguageEditor
                 {
                     var thenCst = new TreeNode("<كتلة_التحقق: ThenBlock>");
                     thenCst.Nodes.Add(new TreeNode("قوس: {"));
-                    foreach (var stmt in node.Children[1].Children) thenCst.Nodes.Add(BuildCstStatementNode(stmt));
+                    var thenBody = node.Children[1];
+                    if (thenBody.Children != null && thenBody.Children.Count > 0)
+                    {
+                        foreach (var stmt in thenBody.Children) thenCst.Nodes.Add(BuildCstStatementNode(stmt));
+                    }
+                    else
+                    {
+                        thenCst.Nodes.Add(BuildCstStatementNode(thenBody));
+                    }
                     thenCst.Nodes.Add(new TreeNode("قوس: }"));
                     ifCst.Nodes.Add(thenCst);
                 }
                 if (node.Children.Count > 2)
                 {
+                    var elseNode = node.Children[2];
                     ifCst.Nodes.Add(new TreeNode("كلمة_مفتاحية: والا"));
                     var elseCst = new TreeNode("<كتلة_البديل: ElseBlock>");
                     elseCst.Nodes.Add(new TreeNode("قوس: {"));
-                    foreach (var stmt in node.Children[2].Children) elseCst.Nodes.Add(BuildCstStatementNode(stmt));
+                    if (elseNode.Children != null && elseNode.Children.Count > 0)
+                    {
+                        foreach (var stmt in elseNode.Children) elseCst.Nodes.Add(BuildCstStatementNode(stmt));
+                    }
+                    else
+                    {
+                        elseCst.Nodes.Add(BuildCstStatementNode(elseNode));
+                    }
                     elseCst.Nodes.Add(new TreeNode("قوس: }"));
                     ifCst.Nodes.Add(elseCst);
                 }
@@ -1322,7 +1424,15 @@ namespace LanguageEditor
                 if (node.Children.Count > 1)
                 {
                     var body = new TreeNode("<جسم_الحلقة: LoopBody>");
-                    foreach (var s in node.Children[1].Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    var whileBody = node.Children[1];
+                    if (whileBody.Children != null && whileBody.Children.Count > 0)
+                    {
+                        foreach (var s in whileBody.Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    }
+                    else
+                    {
+                        body.Nodes.Add(BuildCstStatementNode(whileBody));
+                    }
                     loopCst.Nodes.Add(body);
                 }
                 loopCst.Nodes.Add(new TreeNode("رمز_طرفي: ؛"));
@@ -1335,7 +1445,15 @@ namespace LanguageEditor
                 if (node.Children.Count > 0)
                 {
                     var body = new TreeNode("<جسم_الحلقة: LoopBody>");
-                    foreach (var s in node.Children[0].Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    var repeatBody = node.Children[0];
+                    if (repeatBody.Children != null && repeatBody.Children.Count > 0)
+                    {
+                        foreach (var s in repeatBody.Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    }
+                    else
+                    {
+                        body.Nodes.Add(BuildCstStatementNode(repeatBody));
+                    }
                     loopCst.Nodes.Add(body);
                 }
                 loopCst.Nodes.Add(new TreeNode("كلمة_مفتاحية: حتى"));
@@ -1354,8 +1472,16 @@ namespace LanguageEditor
                 forCst.Nodes.Add(new TreeNode("كلمة_مفتاحية: الى"));
                 if (node.Children.Count > 0)
                 {
+                    var lastChild = node.Children[node.Children.Count - 1];
                     var body = new TreeNode("<جسم_الحلقة: LoopBody>");
-                    foreach (var s in node.Children[0].Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    if (lastChild.Children != null && lastChild.Children.Count > 0)
+                    {
+                        foreach (var s in lastChild.Children) body.Nodes.Add(BuildCstStatementNode(s));
+                    }
+                    else
+                    {
+                        body.Nodes.Add(BuildCstStatementNode(lastChild));
+                    }
                     forCst.Nodes.Add(body);
                 }
                 forCst.Nodes.Add(new TreeNode("رمز_طرفي: ؛"));
@@ -1387,8 +1513,11 @@ namespace LanguageEditor
             return genCst;
         }
 
-        private TreeNode BuildCstExpressionNode(NodeDto node)
+        private TreeNode BuildCstExpressionNode(NodeDto? node)
         {
+            if (node == null) return new TreeNode("<تعبير_فارغ>");
+            if (node.Children == null) node.Children = new List<NodeDto>();
+
             if (node.Children.Count > 0)
             {
                 var opNode = new TreeNode($"<عملية: {node.Value}>");
